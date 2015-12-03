@@ -1,3 +1,17 @@
+mapkey('ZQ', 'Quit', function() {
+    RUNTIME('quit');
+});
+mapkey('ZZ', 'Save session and quit', function() {
+    RUNTIME('createSession', {
+        name: 'LAST'
+    });
+    RUNTIME('quit');
+});
+mapkey('ZR', 'Restore last session', function() {
+    RUNTIME('openSession', {
+        name: 'LAST'
+    });
+});
 mapkey('T', 'Choose a tab', 'Normal.chooseTab()');
 mapkey('c-i', 'Show usage', 'Normal.showUsage()');
 mapkey('u', 'Show usage', 'Normal.showUsage()');
@@ -28,6 +42,35 @@ mapkey('t', 'Open an URLs', 'Normal.openOmnibar(OpenURLs)');
 mapkey('b', 'Open a bookmark', 'Normal.openOmnibar(OpenBookmarks)');
 mapkey('oh', 'Open URL from history', 'Normal.openOmnibar(OpenHistory)');
 mapkey('om', 'Open URL from vim-like marks', 'Normal.openOmnibar(OpenVIMarks)');
+mapkey(':', 'Open commands', 'Normal.openOmnibar(Commands)');
+command('quit', 'quit chrome', function() {
+    RUNTIME('quit');
+});
+command('listSession', 'list session', function() {
+    portRequest({
+        action: 'getSessions'
+    }, function(response) {
+        Omnibar.listResults(Object.keys(response.sessions), function(s) {
+            return $('<li/>').html(s);
+        });
+    });
+});
+command('createSession', 'createSession [name]', function(name) {
+    RUNTIME('createSession', {
+        name: name
+    });
+});
+command('deleteSession', 'deleteSession [name]', function(name) {
+    RUNTIME('deleteSession', {
+        name: name
+    });
+    return true; // to close omnibar after the command executed.
+});
+command('openSession', 'openSession [name]', function(name) {
+    RUNTIME('openSession', {
+        name: name
+    });
+});
 mapkey('v', 'Toggle visual mode', 'Visual.toggle()');
 mapkey('/', 'Find in current page', 'Find.open()');
 mapkey('*', 'Find selected text in current page', function() {
@@ -65,6 +108,7 @@ mapkey('ys', "Copy current page's source", function() {
 });
 mapkey('yt', 'Duplicate current tab', 'RUNTIME("duplicateTab")');
 mapkey('yf', "Copy current page's URL", 'Normal.writeClipboard(window.location.href)');
+mapkey('yl', "Copy current page's title", 'Normal.writeClipboard(document.title)');
 mapkey('ob', 'Open Search with alias b', 'Normal.openOmnibar(SearchEngine, "b")');
 mapkey('og', 'Open Search with alias g', 'Normal.openOmnibar(SearchEngine, "g")');
 mapkey('ow', 'Open Search with alias w', 'Normal.openOmnibar(SearchEngine, "w")');

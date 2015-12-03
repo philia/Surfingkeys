@@ -22,8 +22,10 @@ Service.settings = {
     blacklist: {},
     marks: {},
     findHistory: [],
+    cmdHistory: [],
     version: chrome.runtime.getManifest().version,
     snippets: "",
+    sessions: {},
     storage: 'local'
 };
 
@@ -240,7 +242,7 @@ Service.getURLs = function(message, sender, sendResponse) {
         var vacancy = message.maxResults - bookmarks.length;
         if (vacancy > 0) {
             chrome.history.search({
-                'text': message.query,
+                text: message.query,
                 startTime: 0,
                 maxResults: vacancy
             }, function(tree) {
@@ -348,6 +350,55 @@ Service.moveTab = function(message, sender, sendResponse) {
     if (newPos > -1 && newPos < 10) {
         chrome.tabs.move(activeTabId, {index: newPos});
     }
+};
+Service.quit = function(message, sender, sendResponse) {
+    chrome.windows.getAll({
+        populate: false
+    }, function(windows) {
+        windows.forEach(function(w) {
+            chrome.windows.remove(w.id);
+        });
+    });
+};
+Service.createSession = function(message, sender, sendResponse) {
+    Service.settings.sessions[message.name] = {'tabs':[]};
+    chrome.tabs.query({
+        currentWindow: true
+    }, function(tabs) {
+        tabs.forEach(function(tab) {
+            if (tab && tab.index !== void 0) {
+                Service.settings.sessions[message.name]['tabs'].push(tab.url);
+            }
+        });
+        chrome.storage.local.set({
+            sessions: Service.settings.sessions
+        });
+    });
+};
+Service.getSessions = function(message, sender, sendResponse) {
+    sendResponse({
+        type: message.action,
+        id: message.id,
+        sessions: Service.settings.sessions
+    });
+};
+Service.openSession = function(message, sender, sendResponse) {
+    if (Service.settings.sessions.hasOwnProperty(message.name)) {
+        var urls = Service.settings.sessions[message.name]['tabs'];
+        urls.forEach(function(url) {
+            chrome.tabs.create({
+                url: url,
+                active: false,
+                pinned: false
+            });
+        });
+    }
+};
+Service.deleteSession = function(message, sender, sendResponse) {
+    delete Service.settings.sessions[message.name];
+    chrome.storage.local.set({
+        sessions: Service.settings.sessions
+    });
 };
 
 function handleMessage(_message, _sender, _sendResponse, _port) {
