@@ -25,6 +25,7 @@ Surfingkeys的配置全部写在一段javascript中，很容易添加自己的�
 * 在visual mode下，按`*` 可以搜索当前单词。
 * 滚动操作（像`e` `d`上下翻页之类）可以在顶层页面工作，也可以在一个支持滚动的DIV中使用。
 * 在一个有多个frame的页面中，`w`可以切换frame。
+* 会话管理。
 
 ## 快速上手
 安装本插件以后，打开你要访问的站点。先按`u`或者`Ctrl-i`看看帮助信息，按`Esc`可以关掉帮助信息。
@@ -41,7 +42,7 @@ Surfingkeys的配置全部写在一段javascript中，很容易添加自己的�
 ![follow](https://cloud.githubusercontent.com/assets/288207/10328833/e32d85a2-6ceb-11e5-8614-3f8a804cb2f2.png)
 * `v` 切换文本选择模式
 ![visual](https://cloud.githubusercontent.com/assets/288207/10328835/e4df6c6c-6ceb-11e5-8ed7-17fd29070207.png)
-* `<space>` 切换标签页
+* `T` 切换标签页
 ![tabs](https://cloud.githubusercontent.com/assets/288207/10328839/f0143ffe-6ceb-11e5-8eee-962db94b2c22.png)
 
 ## Surfingkeys支持的模式
@@ -95,7 +96,7 @@ Surfingkeys目前只有两种模式。
 
 ## 切换标签页
 
-默认情况下，按空格会显示所有已打开标签页，然后按相应的提示键可以切到该标签页。
+默认情况下，按`T`会显示所有已打开标签页，然后按相应的提示键可以切到该标签页。
 
 ![tabs_overlay](https://cloud.githubusercontent.com/assets/288207/10544636/245447f6-7457-11e5-8372-62b8f6337158.png)
 
@@ -111,6 +112,10 @@ Surfingkeys目前只有两种模式。
 
     settings.tabsThreshold = 0;
 
+无论是否在搜索栏里，标签页都按最近使用的顺序列出。如果你希望按标签页原本的顺序列出，可以设置：
+
+    settings.tabsMRUOrder = false;
+
 ## 命令
 
 用`:`打开搜索栏可用于执行命令，命令执行结果会显示在搜索栏下方。可以添加你自己的命令如下：
@@ -122,6 +127,65 @@ Surfingkeys目前只有两种模式。
 除了命令，你还可以执行各类简单js代码。
 
 ![commands_in_omnibar](https://cloud.githubusercontent.com/assets/288207/11527801/fadee82c-991d-11e5-92e9-b054796a6a75.png)
+
+## 顺滑滚动
+
+所有可以滚动的对象都默认支持顺滑滚动，如下可以关掉顺滑特性：
+
+    settings.smoothScroll = false;
+
+## 会话管理
+
+用Surfingkeys在Chrome里保存会话相当于保存所有标签页的地址，打开会话则相当于在不同的标签页中打开所有保存其中的网页地址，所以会话基本上就是一个网页地址列表，每个会话有自己的名字。
+
+* `ZZ`会保存所有当前标签页到一个名为`LAST`的会话，然后退出。
+* `ZR`恢复名为`LAST`的会话。
+* `ZQ`就只退出，不保存当前会话。
+
+你可以在命令模式下创建／管理多个不同名称的会话。按`:`打开命令窗口，然后输入:
+
+    createSession works
+
+就会创建一个名为`works`的会话，要打开该会话使用如下命令：
+
+    openSession works
+
+列出已保存的所有会话：
+
+    listSession
+
+删除某个会话：
+
+    deleteSession works
+
+## 开关热键
+
+默认情况下，按`alt-s`可以在当前页开关Surfingkeys。当Surfingkeys处于关闭状态时，除了热键，其它所有按键映射都停止工作。用如下设置修改热键：
+
+    Events.hotKey = 'i'; // 热键只能是一个按键，但可以带辅助按键，不能是`gg`这样的一串按键。
+
+## 代理设置
+
+Surfingkeys提供了一些代理设置相关的命令和一个快捷键。
+
+* setProxy, 设置代理，示例如下：
+
+        setProxy 192.168.1.100:8080
+        setProxy 127.0.0.1:1080 SOCKS5
+
+* setProxyMode, 设置代理模式，有三种模式：direct, byhost, always
+
+        direct      Chrome不使用代理访问任何网站。
+        byhost      Chrome只在访问你通过下面的命令添加的网站时使用代理。
+        always      Chrome使用代理访问所有网站。
+
+* addProxySite, removeProxySite, toggleProxySite, 管理你需要通过代理访问的网站，比如：
+
+        addProxySite google.com,facebook.com,twitter.com
+
+* proxyInfo, 列出你当前的代理设置，包括用以上命令设置的信息。
+
+* `cp`, 切换当前站点的代理设置，即是否使用代理访问当前站点。
 
 ## 配置参考
 
@@ -199,12 +263,6 @@ Surfingkeys目前只有两种模式。
 
     Omnibar.listWords(<array of words>)
     Omnibar.html(<any html snippets>)
-
-### 添加一个迷你查询
-
-迷你查询很像一个搜索引擎，不同的是，它把查询结果直接在小窗里显示出来，而不是打开一个新页。
-
-    addMiniQuery(alias, prompt, search_url, callback_to_display_result);
 
 ## License
 

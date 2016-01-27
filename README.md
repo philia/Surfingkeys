@@ -25,6 +25,7 @@ Surfingkeys is created with all settings described in Javascript, so it's easy f
 * `*` to search word under cursor in visual mode.
 * Scroll actions like page up/down (`e` `d`) work for not only top window but also scrollable DIV.
 * `w` to switch frames if there is.
+* session management
 
 ## Quick start
 
@@ -42,7 +43,7 @@ Try some mappings described in the usage popover. For example, press `e` to scro
 ![follow](https://cloud.githubusercontent.com/assets/288207/10328833/e32d85a2-6ceb-11e5-8614-3f8a804cb2f2.png)
 * `v` to toggle visual mode
 ![visual](https://cloud.githubusercontent.com/assets/288207/10328835/e4df6c6c-6ceb-11e5-8ed7-17fd29070207.png)
-* `<space>` to switch tabs
+* `T` to switch tabs
 ![tabs](https://cloud.githubusercontent.com/assets/288207/10328839/f0143ffe-6ceb-11e5-8eee-962db94b2c22.png)
 
 ## Surfingkeys modes
@@ -98,7 +99,7 @@ This is very useful for those pages you access very frequently. `om` to check ou
 
 ## Switch tabs
 
-By default, pressing `<space>` will show all opened tabs in an overlay, then pressing the hint char, will switch to the related tab.
+By default, pressing `T` will show all opened tabs in an overlay, then pressing the hint char, will switch to the related tab.
 
 ![tabs_overlay](https://cloud.githubusercontent.com/assets/288207/10544636/245447f6-7457-11e5-8372-62b8f6337158.png)
 
@@ -114,6 +115,10 @@ which works same as:
 
     settings.tabsThreshold = 0;
 
+The tabs are displayed in MRU order by default, either in omnibar or overlay. If you want them in natural order, use:
+
+    settings.tabsMRUOrder = false;
+
 ## Commands
 
 `:` to open omnibar for commands, then you can execute any pre-defined or customized command there. The result will be displayed below the omnibar. To create your own command as below:
@@ -125,6 +130,65 @@ which works same as:
 Besides commands, you can also run javascript code.
 
 ![commands_in_omnibar](https://cloud.githubusercontent.com/assets/288207/11527801/fadee82c-991d-11e5-92e9-b054796a6a75.png)
+
+## Smooth scroll
+
+Smooth scroll works for any scrollable element. It is on by defualt, to turn it off as below:
+
+    settings.smoothScroll = false;
+
+## Session management
+
+To create session in Chrome with Surfingkeys will save URLs for all tabs, and to open a session will open all the URLs of the session in different tab, so basically a session is a list of URLs, which has a name.
+
+* `ZZ` will save all current tabs into a session named `LAST` then quit.
+* `ZR` will restore the session named `LAST`.
+* `ZQ` will just quit.
+
+You can create multiple sessions with different names in command mode. Press `:` to open omnibar for commands, then input:
+
+    createSession works
+
+Surfingkeys will create a session named `works` for you, to open the session with command input as:
+
+    openSession works
+
+To list all your saved sessions:
+
+    listSession
+
+To delete a session:
+
+    deleteSession works
+
+## Hotkey to toggle Surfingkeys
+
+By default, `alt-s` will toggle Surfingkeys for current page. When Surfingkeys is turned off, all mappings stop working except the hotkey. To change hotkey, use settings below:
+
+    Events.hotKey = 'i'; // hotkey must be one keystroke with/without modifier, it can not be a sequence of keystrokes like `gg`.
+
+## Proxy settings
+
+Surfingkeys provides some commands and a shortcut for you set proxy.
+
+* setProxy, to set proxy, some examples:
+
+        setProxy 192.168.1.100:8080
+        setProxy 127.0.0.1:1080 SOCKS5
+
+* setProxyMode, to set proxy mode, there are three modes: direct, byhost, always
+
+        direct      Chrome will connect to all sites directly.
+        byhost      Chrome will only connect to sites added by `addProxySite` through proxy.
+        always      Chrome will connect to all sites through proxy.
+
+* addProxySite, removeProxySite, toggleProxySite, to make Chrome connect to site through proxy or not, examples:
+
+        addProxySite google.com,facebook.com,twitter.com
+
+* proxyInfo, to list proxy you set by `setProxy`, proxy mode you set by `setProxyMode` and sites you add/remove by `addProxySite`/`removeProxySite`/`toggleProxySite`.
+
+* `cp`, toggle proxy for current site.
 
 ## Edit your own settings
 
@@ -202,12 +266,6 @@ works like
 
     Omnibar.listWords(<array of words>)
     Omnibar.html(<any html snippets>)
-
-### Add a mini query
-
-Mini query differs from search engine by showing the query result in omnibar instead of openning a new page.
-
-    addMiniQuery(alias, prompt, search_url, callback_to_display_result);
 
 ## License
 
