@@ -1,13 +1,20 @@
-////////////////////////////////////////////////////////////////////////////////
-// dummy functions
-function command() {}
+if (typeof(command) === 'undefined') {
+    command = function() {};
+}
 
-function addSearchAlias() {}
+if (typeof(addSearchAlias) === 'undefined') {
+    addSearchAlias = function() {};
+}
 
-////////////////////////////////////////////////////////////////////////////////
-
+var actionsRepeatBackground = ['closeTab', 'nextTab', 'previousTab'];
 RUNTIME = function(action, args) {
     (args = args || {}).action = action;
+    if (actionsRepeatBackground.indexOf(action) !== -1) {
+        // if the action can only be repeated in background, pass repeats to background with args,
+        // and set RUNTIME.repeats 1, so that it won't be repeated in foreground's _handleMapKey
+        args.repeats = RUNTIME.repeats;
+        RUNTIME.repeats = 1;
+    }
     try {
         chrome.runtime.sendMessage(args);
     } catch (e) {
@@ -79,7 +86,6 @@ function unmap(keystroke, domain) {
     }
 }
 
-
 function addSearchAliasX(alias, prompt, search_url, search_leader_key, suggestion_url, callback_to_parse_suggestion, only_this_site_key) {
     addSearchAlias(alias, prompt, search_url, suggestion_url, callback_to_parse_suggestion);
     mapkey((search_leader_key || 's') + alias, 'Search selected with ' + prompt, 'searchSelectedWith("{0}")'.format(search_url));
@@ -102,8 +108,7 @@ function tabOpenLink(url) {
             tabbed: true
         },
         position: runtime.settings.newTabPosition,
-        url: url,
-        repeats: 1
+        url: url
     });
 }
 
@@ -145,11 +150,13 @@ function applySettings() {
             settings: settings
         });
     } catch (e) {
-        console.log(e);
-        runtime.command({
-            action: "resetSettings",
-            useDefault: true
-        });
+        if (window === top) {
+            console.log("reset Settings because of: " + e);
+            runtime.command({
+                action: "resetSettings",
+                useDefault: true
+            });
+        }
     }
     $(document).trigger("surfingkeys:settingsApplied");
 }
@@ -169,10 +176,6 @@ $(document).on('surfingkeys:settingsApplied', function(e) {
     Events.resetListeners();
 });
 
-if (runtime && runtime.settings) {
+$.when(settingsDeferred).done(function (settings) {
     applySettings();
-} else {
-    $(document).on('surfingkeys:connected', function(e) {
-        applySettings();
-    });
-}
+});

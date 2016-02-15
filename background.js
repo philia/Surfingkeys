@@ -29,6 +29,7 @@ var Service = (function() {
         autoproxy_hosts: {},
         proxyMode: 'byhost',
         proxy: "DIRECT",
+        interceptedErrors: '*',
         storage: 'local'
     };
     var newTabUrl = "chrome://newtab/";
@@ -109,7 +110,6 @@ var Service = (function() {
     function handleMessage(_message, _sender, _sendResponse, _port) {
         if (_message && _message.target !== 'content_runtime') {
             if (self.hasOwnProperty(_message.action)) {
-                _message.repeats = _message.repeats || 1;
                 self[_message.action](_message, _sender, _sendResponse);
             } else if (_message.toFrontend) {
                 try {
@@ -144,6 +144,7 @@ var Service = (function() {
     function removeTab(tabId) {
         delete contentPorts[tabId];
         delete frontEndPorts[tabId];
+        delete tabErrors[tabId];
         unRegisterFrame(tabId);
         tabHistory = tabHistory.filter(function(e) {
             return e !== tabId;
@@ -202,13 +203,50 @@ var Service = (function() {
             }
         });
     });
-    chrome.webRequest.onErrorOccurred.addListener(
-        function(details) {
-            console.log(details);
-        }, {
-            urls: ["<all_urls>"]
+    var tabErrors = {};
+    chrome.webRequest.onErrorOccurred.addListener(function(details) {
+        var tabId = details.tabId;
+        if (tabId !== -1 && (settings.interceptedErrors === "*" || details.error in settings.interceptedErrors)) {
+            if (!tabErrors.hasOwnProperty(tabId)) {
+                tabErrors[tabId] = [];
+            }
+            if (details.type === "main_frame") {
+                if (details.error !== "net::ERR_ABORTED") {
+                    chrome.tabs.update(tabId, {
+                        url: chrome.extension.getURL("pages/error.html")
+                    });
+                }
+            }
+            tabErrors[tabId].push(details);
         }
-    );
+    }, {
+        urls: ["<all_urls>"]
+    });
+    function _response(message, sendResponse, result) {
+        result.action = message.action;
+        result.id = message.id;
+        sendResponse(result);
+    }
+    self.getTabErrors = function(message, sender, sendResponse) {
+        _response(message, sendResponse, {
+            tabError: tabErrors[sender.tab.id]
+        });
+    };
+    self.clearTabErrors = function(message, sender, sendResponse) {
+        tabErrors[sender.tab.id] = [];
+    };
+    self.isTabActive = function(message, sender, sendResponse) {
+        chrome.tabs.query({
+            active: true
+        }, function(resp) {
+            var activeTabs = resp.map(function(t) {
+                return t.id;
+            });
+            _response(message, sendResponse, {
+                active: (activeTabs.indexOf(sender.tab.id) !== -1)
+            });
+        });
+    };
 
     function unRegisterFrame(tabId) {
         if (frameIncs.hasOwnProperty(tabId)) {
@@ -278,9 +316,7 @@ var Service = (function() {
                     return tabActivated[b.id] - tabActivated[a.id];
                 });
             }
-            sendResponse({
-                action: message.action,
-                id: message.id,
+            _response(message, sendResponse, {
                 tabs: tabs
             });
         });
@@ -312,25 +348,20 @@ var Service = (function() {
             });
         }
     };
-    self.nextTab = function(message, sender, sendResponse) {
-        var tab = sender.tab;
+    function _nextTab(tab, step) {
         chrome.tabs.query({
             windowId: tab.windowId
         }, function(tabs) {
-            chrome.tabs.update(tabs[(((tab.index + 1) % tabs.length) + tabs.length) % tabs.length].id, {
+            chrome.tabs.update(tabs[(((tab.index + step) % tabs.length) + tabs.length) % tabs.length].id, {
                 active: true
             });
         });
+    }
+    self.nextTab = function(message, sender, sendResponse) {
+        _nextTab(sender.tab, message.repeats);
     };
     self.previousTab = function(message, sender, sendResponse) {
-        var tab = sender.tab;
-        chrome.tabs.query({
-            windowId: tab.windowId
-        }, function(tabs) {
-            return chrome.tabs.update(tabs[(((tab.index - 1) % tabs.length) + tabs.length) % tabs.length].id, {
-                active: true
-            });
-        });
+        _nextTab(sender.tab, -message.repeats);
     };
     self.reloadTab = function(message, sender, sendResponse) {
         chrome.tabs.reload({
@@ -355,31 +386,23 @@ var Service = (function() {
         });
     };
     self.openLast = function(message, sender, sendResponse) {
-        for (var i = 0; i < message.repeats; i++) {
-            chrome.sessions.restore();
-        }
+        chrome.sessions.restore();
     };
     self.duplicateTab = function(message, sender, sendResponse) {
-        for (var i = 0; i < message.repeats; i++) {
-            chrome.tabs.duplicate(sender.tab.id);
-        }
+        chrome.tabs.duplicate(sender.tab.id);
     };
     self.getBookmarkFolders = function(message, sender, sendResponse) {
         chrome.bookmarks.getTree(function(tree) {
             bookmarkFolders = [];
             getFolders(tree[0], "");
-            sendResponse({
-                action: message.action,
-                id: message.id,
+            _response(message, sendResponse, {
                 folders: bookmarkFolders
             });
         });
     };
     self.createBookmark = function(message, sender, sendResponse) {
         createBookmark(message.page, function(ret) {
-            sendResponse({
-                action: message.action,
-                id: message.id,
+            _response(message, sendResponse, {
                 bookmark: ret
             });
         });
@@ -393,26 +416,20 @@ var Service = (function() {
                         return b.title.indexOf(message.query) !== -1 || (b.url && b.url.indexOf(message.query) !== -1);
                     });
                 }
-                sendResponse({
-                    action: message.action,
-                    id: message.id,
+                _response(message, sendResponse, {
                     bookmarks: bookmarks
                 });
             });
         } else {
             if (message.query && message.query.length) {
                 chrome.bookmarks.search(message.query, function(tree) {
-                    sendResponse({
-                        action: message.action,
-                        id: message.id,
+                    _response(message, sendResponse, {
                         bookmarks: tree
                     });
                 });
             } else {
                 chrome.bookmarks.getTree(function(tree) {
-                    sendResponse({
-                        action: message.action,
-                        id: message.id,
+                    _response(message, sendResponse, {
                         bookmarks: tree[0].children
                     });
                 });
@@ -421,9 +438,7 @@ var Service = (function() {
     };
     self.getHistory = function(message, sender, sendResponse) {
         chrome.history.search(message.query, function(tree) {
-            sendResponse({
-                action: message.action,
-                id: message.id,
+            _response(message, sendResponse, {
                 history: tree
             });
         });
@@ -438,16 +453,12 @@ var Service = (function() {
                     startTime: 0,
                     maxResults: vacancy
                 }, function(tree) {
-                    sendResponse({
-                        action: message.action,
-                        id: message.id,
+                    _response(message, sendResponse, {
                         urls: tree.concat(bookmarks)
                     });
                 });
             } else {
-                sendResponse({
-                    action: message.action,
-                    id: message.id,
+                _response(message, sendResponse, {
                     urls: bookmarks
                 });
             }
@@ -469,14 +480,12 @@ var Service = (function() {
                 default:
                     break;
             }
-            for (var i = 0; i < message.repeats; ++i) {
-                chrome.tabs.create({
-                    url: message.url,
-                    active: message.tab.active,
-                    index: newTabPosition,
-                    pinned: message.tab.pinned
-                });
-            }
+            chrome.tabs.create({
+                url: message.url,
+                active: message.tab.active,
+                index: newTabPosition,
+                pinned: message.tab.pinned
+            });
         } else {
             chrome.tabs.update({
                 url: message.url,
@@ -489,8 +498,7 @@ var Service = (function() {
         self.openLink(message, sender, sendResponse);
     };
     self.getSettings = function(message, sender, sendResponse) {
-        sendResponse({
-            action: message.action,
+        _response(message, sendResponse, {
             settings: settings
         });
     };
@@ -522,9 +530,7 @@ var Service = (function() {
     self.request = function(message, sender, sendResponse) {
         var s = request(message.method, message.url);
         s.then(function(res) {
-            sendResponse({
-                action: message.action,
-                id: message.id,
+            _response(message, sendResponse, {
                 text: res
             });
         });
@@ -594,9 +600,7 @@ var Service = (function() {
         });
     };
     self.getSessions = function(message, sender, sendResponse) {
-        sendResponse({
-            action: message.action,
-            id: message.id,
+        _response(message, sendResponse, {
             sessions: settings.sessions
         });
     };

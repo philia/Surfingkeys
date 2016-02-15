@@ -12,6 +12,28 @@ mapkey('cp', 'Toggle proxy for current site', function() {
         toggleProxySite(host);
     }
 });
+mapkey('spa', 'use proxy always', function() {
+    RUNTIME('updateProxy', {
+        mode: 'always'
+    });
+});
+mapkey('spb', 'use proxy by host', function() {
+    RUNTIME('updateProxy', {
+        mode: 'byhost'
+    });
+});
+mapkey('spd', 'use no proxy', function() {
+    RUNTIME('updateProxy', {
+        mode: 'direct'
+    });
+});
+function showProxyInfo() {
+    var infos = [ {name: 'mode', value: runtime.settings.proxyMode}, {name: 'proxy', value: runtime.settings.proxy}, {name: 'hosts', value: Object.keys(runtime.settings.autoproxy_hosts).join(', ')} ].map(function(s) {
+        return "<tr><td>{0}</td><td>{1}</td></tr>".format(s.name, s.value);
+    });
+    Normal.showPopup("<table style='width:100%'>{0}</table>".format(infos.join('')));
+}
+mapkey('spi', 'show proxy info', showProxyInfo);
 command('setProxy', 'setProxy <proxy_host>:<proxy_port> [proxy_type|PROXY]', function(endpoint, type) {
     var proxy = (type || "PROXY") + " " + endpoint;
     RUNTIME('updateProxy', {
@@ -40,10 +62,20 @@ command('removeProxySite', 'removeProxySite <host[,host]>, make hosts accessible
     return true;
 });
 command('toggleProxySite', 'toggleProxySite <host>, toggle proxy for a site.', toggleProxySite);
-command('proxyInfo', 'show proxy info', function() {
-    var infos = [ {name: 'mode', value: runtime.settings.proxyMode}, {name: 'proxy', value: runtime.settings.proxy}, {name: 'hosts', value: Object.keys(runtime.settings.autoproxy_hosts).join(', ')} ];
-    Omnibar.listResults(infos, function(s) {
-        return $('<li/>').html(s.name + ": " + s.value);
+command('proxyInfo', 'show proxy info', showProxyInfo);
+mapkey('sfr', 'show failed web requests of current page', function() {
+    runtime.command({
+        action: 'getTabErrors'
+    }, function(response) {
+        if (response.tabError && response.tabError.length) {
+            var errors = response.tabError.map(function(e) {
+                var url = new URL(e.url);
+                return "<tr><td>{0}</td><td>{1}</td><td>{2}</td></tr>".format(e.error, e.type, url.host);
+            });
+            Normal.showPopup("<table style='width:100%'>{0}</table>".format(errors.join('')));
+        } else {
+            Normal.showPopup("No errors from webRequest.");
+        }
     });
 });
 mapkey('ZQ', 'Quit', function() {
@@ -61,6 +93,7 @@ mapkey('ZR', 'Restore last session', function() {
     });
 });
 mapkey('T', 'Choose a tab', 'Normal.chooseTab()');
+mapkey('?', 'Show usage', 'Normal.showUsage()');
 mapkey('c-i', 'Show usage', 'Normal.showUsage()');
 mapkey('u', 'Show usage', 'Normal.showUsage()');
 mapkey('e', 'Scroll a page up', 'Normal.scroll("pageUp")');
