@@ -1,8 +1,8 @@
 var Visual = (function() {
     var self = {};
+    self.name = "Visual";
     self.mappings = new Trie('', Trie.SORT_NONE);
     self.map_node = self.mappings;
-    self.repeats = "";
     self.mappings.add("l", {
         annotation: "forward character",
         code: modifySelection
@@ -78,6 +78,12 @@ var Visual = (function() {
         annotation: "Search word under the cursor",
         code: function() {
             self.star();
+        }
+    });
+    self.mappings.add("<Enter>", {
+        annotation: "Click on node under cursor.",
+        code: function() {
+            Hints.dispatchMouseClick(selection.focusNode.parentNode);
         }
     });
 

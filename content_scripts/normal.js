@@ -1,5 +1,6 @@
 var Normal = (function() {
     var self = {};
+    self.name = "Normal";
     self.mappings = new Trie('', Trie.SORT_NONE);
     self.map_node = self.mappings;
     self.repeats = "";
@@ -56,16 +57,27 @@ var Normal = (function() {
         };
     }
 
-    function getScrollableElements(minHeight, minRatio) {
-        var nodes = [];
-        if (window.innerHeight < document.body.scrollHeight) {
-            nodes.push(document.body);
+    function hasScroll(el, direction, barSize) {
+        var offset = (direction === 'y') ? 'scrollTop' : 'scrollLeft';
+        var result = el[offset];
+
+        if (result < barSize) {
+            // set scroll offset to barSize, and verify if we can get scroll offset as barSize
+            var originOffset = el[offset];
+            el[offset] = barSize;
+            result = el[offset];
+            el[offset] = originOffset;
         }
+        return result >= barSize && (el === document.body || $(el).css('overflow-' + direction) === 'auto');
+    }
+
+    function getScrollableElements() {
+        var nodes = [];
         var nodeIterator = document.createNodeIterator(
             document.body,
             NodeFilter.SHOW_ELEMENT, {
                 acceptNode: function(node) {
-                    return (node !== document.body && node.scrollHeight / node.offsetHeight >= minRatio && node.offsetHeight > minHeight) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+                    return (hasScroll(node, 'y', 16) || hasScroll(node, 'x', 16)) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
                 }
             });
         for (var node; node = nodeIterator.nextNode(); nodes.push(node));
@@ -77,10 +89,12 @@ var Normal = (function() {
             words = mappings.getWords();
         var left = words.length % 2;
         for (var i = 0; i < words.length - left; i += 2) {
-            $("<tr><td class=keyboard><kbd>{0}</kbd></td><td class=annotation>{1}</td><td class=keyboard><kbd>{2}</kbd></td><td class=annotation>{3}</td></tr>".format(words[i], mappings.find(words[i]).meta[0].annotation, words[i + 1], mappings.find(words[i + 1]).meta[0].annotation)).appendTo(tb);
+            var tr = "<tr><td class=keyboard><kbd>{0}</kbd></td><td class=annotation>{1}</td><td class=keyboard><kbd>{2}</kbd></td><td class=annotation>{3}</td></tr>";
+            tr = tr.format(htmlEncode(words[i]), mappings.find(words[i]).meta[0].annotation, htmlEncode(words[i + 1]), mappings.find(words[i + 1]).meta[0].annotation);
+            $(tr).appendTo(tb);
         }
         if (left) {
-            var w = words[words.length - 1];
+            var w = htmlEncode(words[words.length - 1]);
             $("<tr><td class=keyboard><kbd>{0}</kbd></td><td class=annotation>{1}</td><td></td><td></td></tr>".format(w, mappings.find(w).meta[0].annotation)).appendTo(tb);
         }
         return tb;
@@ -115,9 +129,7 @@ var Normal = (function() {
         if (scrollNodes.length > 0) {
             scrollIndex = (scrollIndex + 1) % scrollNodes.length;
             var sn = scrollNodes[scrollIndex];
-            if (!isElementPartiallyInViewport(sn)) {
-                sn.scrollIntoView();
-            }
+            sn.scrollIntoViewIfNeeded();
             self.highlightElement(sn);
         }
     };
@@ -258,7 +270,6 @@ var Normal = (function() {
     };
 
     self.finish = function() {
-        this.repeats = "";
         this.map_node = this.mappings;
         this.pendingMap = null;
         runtime.frontendCommand({
@@ -273,11 +284,14 @@ var Normal = (function() {
             var pf = this.pendingMap.bind(this);
             setTimeout(function() {
                 pf(key);
+                self.repeats = "";
                 finish();
             }, 0);
             ret = true;
-        } else if (this.map_node === this.mappings && (key >= "1" || (this.repeats !== "" && key >= "0")) && key <= "9") {
-            this.repeats += key;
+        } else if (this.map_node === this.mappings && (key >= "1" || (self.repeats !== "" && key >= "0")) && key <= "9") {
+            // self.repeats is shared by Normal and Visual
+            // and reset only after target action executed or cancelled
+            self.repeats += key;
             runtime.frontendCommand({
                 action: 'showKeystroke',
                 key: key
@@ -298,12 +312,13 @@ var Normal = (function() {
                             key: key
                         });
                     } else {
-                        RUNTIME.repeats = parseInt(this.repeats) || 1;
+                        RUNTIME.repeats = parseInt(self.repeats) || 1;
                         setTimeout(function() {
                             while(RUNTIME.repeats > 0) {
                                 code();
                                 RUNTIME.repeats--;
                             }
+                            self.repeats = "";
                             finish();
                         }, 0);
                     }
@@ -328,14 +343,14 @@ var Normal = (function() {
     };
 
     self.handleKeyEvent = function(event, key) {
-        var handled = false;
-        switch (event.keyCode) {
-            case KeyboardUtils.keyCodes.ESC:
-                handled = self.finish();
-                break;
-            default:
-                handled = self._handleMapKey(key);
-                break;
+        var handled;
+        if (!this.pendingMap || key.length === 1) {
+            // actions with extra_chars only works for one char
+            handled = self._handleMapKey(key);
+        }
+        if (event.keyCode === KeyboardUtils.keyCodes.ESC) {
+            self.repeats = "";
+            self.finish();
         }
         return handled;
     };

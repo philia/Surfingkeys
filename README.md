@@ -11,8 +11,8 @@ Both are great extensions. What makes me create another wheel, is that I found s
 
 Surfingkeys is created with all settings described in Javascript, so it's easy for anyone to map any keystrokes to his own defined Javascript function. For example,
 
-    mapkey('c-y', 'Show me the money', function() {
-        alert('a well-known phrase uttered by characters in the 1996 film Jerry Maguire');
+    mapkey('<Ctrl-y>', 'Show me the money', function() {
+        Normal.showPopup('a well-known phrase uttered by characters in the 1996 film Jerry Maguire (Escape to close).');
     });
 
 [Reference for editing your own settings](#edit-your-own-settings).
@@ -217,6 +217,8 @@ To avoid manually editing PAC script and reloading/switching profile by clicking
         direct      Chrome will connect to all sites directly.
         byhost      Chrome will only connect to sites added by `addProxySite` through proxy.
         always      Chrome will connect to all sites through proxy.
+        system      Use proxy configuration taken from the operating system.
+        clear       Surfingkeys will take on control of proxy settings, this is the default mode.
 
 * addProxySite, removeProxySite, toggleProxySite, to make Chrome connect to site through proxy or not, examples:
 

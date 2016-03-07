@@ -44,6 +44,12 @@ var Hints = (function() {
     }
 
     function hide() {
+        // reset default behaviours
+        behaviours = {
+            active: true,
+            tabbed: false,
+            multipleHits: false
+        };
         holder.html("").remove();
         prefix = "";
     }

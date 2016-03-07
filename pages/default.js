@@ -19,7 +19,7 @@ command('setProxy', 'setProxy <proxy_host>:<proxy_port> [proxy_type|PROXY]', fun
     });
     return true;
 });
-command('setProxyMode', 'setProxyMode <always|direct|byhost>', function(mode) {
+command('setProxyMode', 'setProxyMode <always|direct|byhost|system|clear>', function(mode) {
     RUNTIME('updateProxy', {
         mode: mode
     });
@@ -85,9 +85,9 @@ command('quit', 'quit chrome', function() {
 map('ZQ', ':quit');
 mapkey('ZZ', 'Save session and quit', function() {
     RUNTIME('createSession', {
-        name: 'LAST'
+        name: 'LAST',
+        quitAfterSaved: true
     });
-    RUNTIME('quit');
 });
 mapkey('ZR', 'Restore last session', function() {
     RUNTIME('openSession', {
@@ -96,7 +96,7 @@ mapkey('ZR', 'Restore last session', function() {
 });
 mapkey('T', 'Choose a tab', 'Normal.chooseTab()');
 mapkey('?', 'Show usage', 'Normal.showUsage()');
-mapkey('c-i', 'Show usage', 'Normal.showUsage()');
+mapkey('<Ctrl-i>', 'Show usage', 'Normal.showUsage()');
 mapkey('u', 'Show usage', 'Normal.showUsage()');
 mapkey('e', 'Scroll a page up', 'Normal.scroll("pageUp")');
 mapkey('d', 'Scroll a page down', 'Normal.scroll("pageDown")');
@@ -106,15 +106,15 @@ mapkey('h', 'Scroll left', 'Normal.scroll("left")');
 mapkey('l', 'Scroll right', 'Normal.scroll("right")');
 mapkey('gg', 'Scroll to the top of the page', 'Normal.scroll("top")');
 mapkey('G', 'Scroll to the bottom of the page', 'Normal.scroll("bottom")');
-mapkey('zH', 'Scroll all the way to the left', 'Normal.scroll("leftmost")');
-mapkey('zL', 'Scroll all the way to the right', 'Normal.scroll("rightmost")');
+mapkey('0', 'Scroll all the way to the left', 'Normal.scroll("leftmost")');
+mapkey('$', 'Scroll all the way to the right', 'Normal.scroll("rightmost")');
 mapkey('cs', 'Change scroll target', 'Normal.changeScrollTarget()');
 // define all the css selectors that can be followed
 Hints.pointers = "a, button, *:visible:css(cursor=pointer), select:visible, input:visible, textarea:visible";
 mapkey('f', 'Open a link', 'Hints.create(Hints.pointers, Hints.dispatchMouseClick)');
 mapkey('af', 'Open a link in new tab', 'Hints.create(Hints.pointers, Hints.dispatchMouseClick, {tabbed: true})');
 mapkey('gf', 'Open a link in non-active new tab', 'Hints.create(Hints.pointers, Hints.dispatchMouseClick, {tabbed: true, active: false})');
-mapkey('a-f', 'Open multiple links in a new tab', 'Hints.create(Hints.pointers, Hints.dispatchMouseClick, {tabbed: true, active: false, multipleHits: true})');
+mapkey('<Alt-f>', 'Open multiple links in a new tab', 'Hints.create(Hints.pointers, Hints.dispatchMouseClick, {tabbed: true, active: false, multipleHits: true})');
 mapkey('yf', 'Copy a link URL to the clipboard', function() {
     Hints.create('*[href]', function(element, event) {
         Normal.writeClipboard(element.href);
@@ -124,7 +124,7 @@ mapkey('i', 'Go to edit box', 'Hints.create("input:visible, textarea:visible", H
 mapkey('q', 'Click on an Image or a button', 'Hints.create("img, button", Hints.dispatchMouseClick)');
 mapkey('E', 'Go one tab left', 'RUNTIME("previousTab")');
 mapkey('R', 'Go one tab right', 'RUNTIME("nextTab")');
-mapkey('a-p', 'pin/unpin current tab', 'RUNTIME("togglePinTab")');
+mapkey('<Alt-p>', 'pin/unpin current tab', 'RUNTIME("togglePinTab")');
 mapkey('B', 'Go one tab history back', 'RUNTIME("historyTab", {backward: true})');
 mapkey('F', 'Go one tab history forward', 'RUNTIME("historyTab", {backward: false})');
 mapkey('S', 'Go back in history', 'history.go(-1)');
@@ -196,7 +196,7 @@ mapkey('cc', 'Open selected link or link from clipboard', function() {
         tabOpenLink(window.getSelection().toString());
     } else {
         Normal.getContentFromClipboard(function(response) {
-            var links = response.data.split('\n');
+            var links = response.data.split('\n').slice(0, 10);
             links.forEach(function(u) {
                 u = u.trim();
                 if (u.length > 0) {
