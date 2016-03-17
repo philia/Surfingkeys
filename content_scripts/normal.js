@@ -68,7 +68,10 @@ var Normal = (function() {
             result = el[offset];
             el[offset] = originOffset;
         }
-        return result >= barSize && (el === document.body || $(el).css('overflow-' + direction) === 'auto');
+        return result >= barSize && (
+            el === document.body
+            || $(el).css('overflow-' + direction) === 'auto'
+            || $(el).css('overflow-' + direction) === 'scroll');
     }
 
     function getScrollableElements() {
@@ -84,26 +87,46 @@ var Normal = (function() {
         return nodes;
     }
 
-    function renderMappings(mappings) {
-        var tb = $('<table/>'),
-            words = mappings.getWords();
-        var left = words.length % 2;
-        for (var i = 0; i < words.length - left; i += 2) {
-            var tr = "<tr><td class=keyboard><kbd>{0}</kbd></td><td class=annotation>{1}</td><td class=keyboard><kbd>{2}</kbd></td><td class=annotation>{3}</td></tr>";
-            tr = tr.format(htmlEncode(words[i]), mappings.find(words[i]).meta[0].annotation, htmlEncode(words[i + 1]), mappings.find(words[i + 1]).meta[0].annotation);
-            $(tr).appendTo(tb);
-        }
-        if (left) {
-            var w = htmlEncode(words[words.length - 1]);
-            $("<tr><td class=keyboard><kbd>{0}</kbd></td><td class=annotation>{1}</td><td></td><td></td></tr>".format(w, mappings.find(w).meta[0].annotation)).appendTo(tb);
-        }
-        return tb;
+    var feature_groups = [
+        'Help',                  // 0
+        'Mouse Click',           // 1
+        'Scroll Page / Element', // 2
+        'Tabs',                  // 3
+        'Page Navigation',       // 4
+        'Sessions',              // 5
+        'Search selected with',  // 6
+        'Clipboard',             // 7
+        'Omnibar',               // 8
+        'Visual Mode',           // 9
+        'vim-like marks',        // 10
+        'Settings',              // 11
+        'Chrome URLs',           // 12
+        'Proxy',                 // 13
+        'Misc',                  // 14
+    ];
+    function renderMappings() {
+        var div = $("<div></div>");
+        var help_groups = feature_groups.map(function(){return [];});
+        [ Normal.mappings, Visual.mappings ].map(function(mappings) {
+            var words = mappings.getWords();
+            for (var i = 0; i < words.length; i++) {
+                var w = words[i];
+                var meta = mappings.find(w).meta[0];
+                var item = "<div><span class=kbd-span><kbd>{0}</kbd></span><span class=annotation>{1}</span></div>".format(htmlEncode(w), meta.annotation);
+                help_groups[meta.feature_group].push(item);
+            }
+        });
+        help_groups = help_groups.map(function(g, i) {
+            return "<div><div class=feature_name><span>{0}</span></div>{1}</div>".format(feature_groups[i], g.join(''));
+        }).join("");
+        return $(help_groups);
     }
 
-    self.highlightElement = function(sn) {
+    self.highlightElement = function(sn, duration) {
         var rc = sn.getBoundingClientRect();
         runtime.frontendCommand({
             action: 'highlightElement',
+            duration: duration || 200,
             rect: {
                 top: rc.top,
                 left: rc.left,
@@ -201,9 +224,8 @@ var Normal = (function() {
 
     self.showUsage = function() {
         var _usage = $('<div/>');
-        renderMappings(self.mappings).appendTo(_usage);
-        $("<p style='float:right; width:100%; text-align:right'>").html("<a id='moreHelp' href='#' style='color:#0095dd'>Show Mappings in Visual mode</a> | <a href='https://github.com/brookhong/surfingkeys' target='_blank' style='color:#0095dd'>More help</a>").appendTo(_usage);
-        renderMappings(Visual.mappings).attr('class', 'sk_visualUsage').appendTo(_usage).hide();
+        renderMappings().appendTo(_usage);
+        $("<p style='float:right; width:100%; text-align:right'>").html("<a href='https://github.com/brookhong/surfingkeys' target='_blank' style='color:#0095dd'>More help</a>").appendTo(_usage);
         runtime.frontendCommand({
             action: 'showUsage',
             content: _usage.html(),
@@ -343,11 +365,7 @@ var Normal = (function() {
     };
 
     self.handleKeyEvent = function(event, key) {
-        var handled;
-        if (!this.pendingMap || key.length === 1) {
-            // actions with extra_chars only works for one char
-            handled = self._handleMapKey(key);
-        }
+        var handled = self._handleMapKey(key);
         if (event.keyCode === KeyboardUtils.keyCodes.ESC) {
             self.repeats = "";
             self.finish();
@@ -363,7 +381,7 @@ var Normal = (function() {
                 marks: runtime.settings.marks
             }
         });
-        self.showBanner("Mark '{0}' added for: {1}.".format(mark, url));
+        self.showBanner("Mark '{0}' added for: {1}.".format(htmlEncode(mark), url));
     };
 
     self.jumpVIMark = function(mark) {
@@ -376,7 +394,7 @@ var Normal = (function() {
                 url: runtime.settings.marks[mark]
             });
         } else {
-            self.showBanner("No mark '{0}' defined.".format(mark));
+            self.showBanner("No mark '{0}' defined.".format(htmlEncode(mark)));
         }
     };
 

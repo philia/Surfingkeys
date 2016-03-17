@@ -58,7 +58,7 @@ var frontendUI = (function() {
         setTimeout(function() {
             frameElement.hide();
             self.flush();
-        }, 200);
+        }, message.duration);
     };
 
     _tabs.onShow = function(tabs) {
@@ -93,9 +93,6 @@ var frontendUI = (function() {
     };
     _usage.onShow = function(message) {
         _usage.html(message.content);
-        $('#moreHelp').on('click', function() {
-            _usage.find('.sk_visualUsage').toggle();
-        });
     };
     runtime.actions['showUsage'] = function(message) {
         showPopup(_usage, message);
@@ -245,6 +242,15 @@ var frontendUI = (function() {
     delete Events.focusHandlers.getBackFocusOnLoad;
     return self;
 })();
+
+function _filterByTitleOrUrl(urls, query) {
+    if (query && query.length) {
+        urls = urls.filter(function(b) {
+            return b.title.indexOf(query) !== -1 || (b.url && b.url.indexOf(query) !== -1);
+        });
+    }
+    return urls;
+}
 
 var Omnibar = (function(ui) {
     var self = {};
@@ -573,15 +579,21 @@ var AddBookmark = (function() {
     };
 
     self.onEnter = function() {
-        var path = Omnibar.input.val().replace(selectedFolder.title,"").split('/');
-        var title = path.pop();
-        if (title.length) {
-            self.page.title = title;
+        var focusedItem = Omnibar.resultsDiv.find('li.focused');
+        if (focusedItem.length) {
+            selectedFolder = focusedItem.data('folder');
         }
-        if (path.length) {
-            self.page.path = path;
-        } else {
-            self.page.path = [];
+        var path = Omnibar.input.val();
+        self.page.path = [];
+        if (path.indexOf(selectedFolder.title) === 0) {
+            path = path.replace(selectedFolder.title,"").split('/');
+            var title = path.pop();
+            if (title.length) {
+                self.page.title = title;
+            }
+            if (path.length) {
+                self.page.path = path;
+            }
         }
         self.page.folder = selectedFolder.id;
         runtime.command({
@@ -621,18 +633,25 @@ var OpenHistory = (function() {
         prompt: 'history≫'
     };
 
-    self.onEnter = Omnibar.openFocused.bind(self);
-    self.onInput = function() {
+    var all;
+    self.onOpen = function(arg) {
         runtime.command({
             action: 'getHistory',
             query: {
                 startTime: 0,
                 maxResults: runtime.settings.maxResults,
-                text: $(this).val()
+                text: ""
             }
         }, function(response) {
+            all = response.history;
             Omnibar.listBookmark(response.history, false);
         });
+    };
+
+    self.onEnter = Omnibar.openFocused.bind(self);
+    self.onInput = function() {
+        var filtered = _filterByTitleOrUrl(all, $(this).val());
+        Omnibar.listBookmark(filtered, false);
     };
     return self;
 })();
