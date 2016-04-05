@@ -47,10 +47,36 @@ var runtime = window.runtime || (function() {
         args.toContent = true;
         self.command(args, successById);
     };
+    self.setUserData = function(name, value) {
+        var userData = self.settings.userData || {};
+        userData[name] = value;
+        self.command({
+            action: 'updateSettings',
+            settings: {userData: userData}
+        });
+    };
+    self.getUserData = function(name, defValue) {
+        var userData = self.settings.userData || {};
+        return userData[name] || defValue;
+    };
+    self.appendUserData = function(name, value) {
+        var ud = self.getUserData(name, []);
+        if (ud.indexOf(value) === -1) {
+            ud.push(value);
+            self.setUserData(name, ud);
+        }
+    };
     self.updateHistory = function(type, cmd) {
         var prop = type + 'History';
-        var list = self.settings[prop];
-        if (cmd.length) {
+        var list = self.settings[prop] || [];
+        var toUpdate = {};
+        if (cmd.constructor.name === "Array") {
+            toUpdate[prop] = cmd;
+            self.command({
+                action: 'updateSettings',
+                settings: toUpdate
+            });
+        } else if (cmd.length) {
             list = list.filter(function(c) {
                 return c.length && c !== cmd;
             });
@@ -58,7 +84,6 @@ var runtime = window.runtime || (function() {
             if (list.length > 50) {
                 list.pop();
             }
-            var toUpdate = {};
             toUpdate[prop] = list;
             self.command({
                 action: 'updateSettings',

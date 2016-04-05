@@ -143,6 +143,9 @@ mapkey('ab', '#8Bookmark current page to selected folder', function() {
 mapkey('oh', '#8Open URL from history', 'Normal.openOmnibar({type: "History"})');
 mapkey('om', '#8Open URL from vim-like marks', 'Normal.openOmnibar({type: "VIMarks"})');
 mapkey(':', '#8Open commands', 'Normal.openOmnibar({type: "Commands"})');
+command('clearHistory', 'clearHistory <find|cmd|img|...>', function(type) {
+    runtime.updateHistory(type, []);
+});
 command('listSession', 'list session', function() {
     runtime.command({
         action: 'getSessions'
@@ -232,6 +235,13 @@ mapkey('ys', "#7Copy current page's source", function() {
 mapkey('yt', '#3Duplicate current tab', 'RUNTIME("duplicateTab")');
 mapkey('yy', "#7Copy current page's URL", 'Normal.writeClipboard(window.location.href)');
 mapkey('yl', "#7Copy current page's title", 'Normal.writeClipboard(document.title)');
+mapkey('yf', '#7Copy form data on current page', function() {
+    var aa = [];
+    $('form').each(function() {
+        aa.push(getFormData(this));
+    });
+    Normal.writeClipboard(JSON.stringify(aa, null, 4));
+});
 mapkey('ob', '#8Open Search with alias b', 'Normal.openOmnibar({type: "SearchEngine", extra: "b"})');
 mapkey('og', '#8Open Search with alias g', 'Normal.openOmnibar({type: "SearchEngine", extra: "g"})');
 mapkey('ow', '#8Open Search with alias w', 'Normal.openOmnibar({type: "SearchEngine", extra: "w"})');
