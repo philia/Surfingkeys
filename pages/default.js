@@ -115,7 +115,7 @@ mapkey('f', '#1Open a link', 'Hints.create(Hints.pointers, Hints.dispatchMouseCl
 mapkey('af', '#1Open a link in new tab', 'Hints.create(Hints.pointers, Hints.dispatchMouseClick, {tabbed: true})');
 mapkey('gf', '#1Open a link in non-active new tab', 'Hints.create(Hints.pointers, Hints.dispatchMouseClick, {tabbed: true, active: false})');
 mapkey('<Alt-f>', '#1Open multiple links in a new tab', 'Hints.create(Hints.pointers, Hints.dispatchMouseClick, {tabbed: true, active: false, multipleHits: true})');
-mapkey('yf', '#7Copy a link URL to the clipboard', function() {
+mapkey('ya', '#7Copy a link URL to the clipboard', function() {
     Hints.create('*[href]', function(element, event) {
         Normal.writeClipboard(element.href);
     })
@@ -234,6 +234,17 @@ mapkey('ys', "#7Copy current page's source", function() {
 });
 mapkey('yj', "#7Copy current settings", function() {
     Normal.writeClipboard(JSON.stringify(settings, null, 4));
+});
+mapkey('yd', "#7Copy current downloading URL", function() {
+    runtime.command({
+        action: 'getDownloads',
+        query: {state: "in_progress"}
+    }, function(response) {
+        var items = response.downloads.map(function(o) {
+            return o.url;
+        });
+        Normal.writeClipboard(items.join(','));
+    });
 });
 mapkey('yt', '#3Duplicate current tab', 'RUNTIME("duplicateTab")');
 mapkey('yy', "#7Copy current page's URL", 'Normal.writeClipboard(window.location.href)');

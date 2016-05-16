@@ -197,14 +197,33 @@ function searchSelectedWith(se, onlyThisSite) {
     });
 }
 
-function clickOn(links) {
+function clickOn(links, force) {
     var ret = false;
     if (typeof(links) === 'string') {
         links = $(links);
     }
+    var clean = [], pushed = {};
     links.each(function() {
-        Hints.dispatchMouseClick(this);
+        if (this.href) {
+            if (!pushed.hasOwnProperty(this.href)) {
+                clean.push(this);
+                pushed[this.href] = 1;
+            }
+        } else {
+            clean.push(this);
+        }
     });
+    if (clean.length > 1) {
+        if (force) {
+            clean.forEach(function(u) {
+                Hints.dispatchMouseClick(u);
+            });
+        } else {
+            Hints.create(clean, Hints.dispatchMouseClick);
+        }
+    } else {
+        Hints.dispatchMouseClick(clean[0]);
+    }
 }
 
 function getFormData(form) {
@@ -212,7 +231,20 @@ function getFormData(form) {
     var indexed_array = {};
 
     $.map(unindexed_array, function(n, i){
-        indexed_array[n['name']] = n['value'];
+        var nn = n['name'];
+        var vv = n['value'];
+        if (indexed_array.hasOwnProperty(nn)) {
+            var p = indexed_array[nn];
+            if (p.constructor.name === "Array") {
+                p.push(vv);
+            } else {
+                indexed_array[nn] = [];
+                indexed_array[nn].push(p);
+                indexed_array[nn].push(vv);
+            }
+        } else {
+            indexed_array[nn] = vv;
+        }
     });
 
     return indexed_array;
