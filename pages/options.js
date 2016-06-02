@@ -8,7 +8,19 @@ defaultMappingsEditor.container.style.background="#f1f1f1";
 
 var mappingsEditor = ace.edit("mappings");
 mappingsEditor.setTheme("ace/theme/chrome");
-mappingsEditor.setKeyboardHandler('ace/keyboard/vim');
+mappingsEditor.setKeyboardHandler('ace/keyboard/vim', function() {
+    var cm = mappingsEditor.state.cm;
+    cm.on('vim-mode-change', function(data) {
+        if (data.mode === "normal") {
+            Events.includeNode(mappingsEditor.container);
+        } else {
+            Events.excludeNode(mappingsEditor.container);
+        }
+    });
+    cm.constructor.Vim.defineEx("write", "w", function(cm, input) {
+        saveSettings();
+    });
+});
 mappingsEditor.getSession().setMode("ace/mode/javascript");
 mappingsEditor.setValue("// an example to create a new mapping `ctrl-y`\nmapkey('<Ctrl-y>', 'Show me the money', function() {\n    Normal.showPopup('a well-known phrase uttered by characters in the 1996 film Jerry Maguire (Escape to close).');\n});\n\n// an example to replace `u` with `?`, click `Default mappings` to see how `u` works.\nmap('?', 'u');\n\n// an example to remove mapkey `Ctrl-i`\nunmap('<Ctrl-i>');\n\n// click `Save` button to make above settings to take effect.", -1);
 mappingsEditor.commands.addCommand({
@@ -18,21 +30,6 @@ mappingsEditor.commands.addCommand({
     },
     readOnly: false
 });
-
-setTimeout(function() {
-    mappingsEditor.state.cm.on('vim-mode-change', function(data) {
-        if (data.mode === "normal") {
-            Events.includeNode(mappingsEditor.container);
-        } else {
-            Events.excludeNode(mappingsEditor.container);
-        }
-    });
-    var VimApi = require("ace/keyboard/vim").CodeMirror.Vim
-    VimApi.defineEx("write", "w", function(cm, input) {
-        saveSettings();
-    });
-}, 100);
-
 
 function renderSettings() {
     if (runtime.settings.snippets.length) {

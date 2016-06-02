@@ -159,12 +159,28 @@ function addSearchAliasX(alias, prompt, search_url, search_leader_key, suggestio
     vmapkey((search_leader_key || 's') + alias, '#6Search selected with ' + prompt, 'searchSelectedWith("{0}")'.format(search_url));
     mapkey((search_leader_key || 's') + (only_this_site_key || 'o') + alias, '#6Search selected only in this site with ' + prompt, 'searchSelectedWith("{0}", true)'.format(search_url));
     vmapkey((search_leader_key || 's') + (only_this_site_key || 'o') + alias, '#6Search selected only in this site with ' + prompt, 'searchSelectedWith("{0}", true)'.format(search_url));
+
+    var capitalAlias = alias.toUpperCase();
+    if (capitalAlias !== alias) {
+        mapkey((search_leader_key || 's') + capitalAlias, '#6Search selected with {0} interactively'.format(prompt), function() {
+            searchSelectedWith(search_url, false, true, alias);
+        });
+        vmapkey((search_leader_key || 's') + capitalAlias, '#6Search selected with {0} interactively'.format(prompt), function() {
+            searchSelectedWith(search_url, false, true, alias);
+        });
+        mapkey((search_leader_key || 's') + (only_this_site_key || 'o') + capitalAlias, '#6Search selected only in this site with {0} interactively'.format(prompt), function() {
+            searchSelectedWith(search_url, true, true, alias);
+        });
+        vmapkey((search_leader_key || 's') + (only_this_site_key || 'o') + capitalAlias, '#6Search selected only in this site with {0} interactively'.format(prompt), function() {
+            searchSelectedWith(search_url, true, true, alias);
+        });
+    }
 }
 
 function walkPageUrl(step) {
-    var numbers = window.location.href.match(/^(.*\/[^\/\d]*)(\d+)$/);
-    if (numbers && numbers.length === 3) {
-        window.location.href = numbers[1] + (parseInt(numbers[2]) + step);
+    var numbers = window.location.href.match(/^(.*\/[^\/\d]*)(\d+)([^\d]*)$/);
+    if (numbers && numbers.length === 4) {
+        window.location.href = numbers[1] + (parseInt(numbers[2]) + step) + numbers[3];
     }
 }
 
@@ -187,13 +203,17 @@ function tabOpenLink(url) {
     });
 }
 
-function searchSelectedWith(se, onlyThisSite) {
+function searchSelectedWith(se, onlyThisSite, interactive, alias) {
     Normal.getContentFromClipboard(function(response) {
         var query = window.getSelection().toString() || response.data;
         if (onlyThisSite) {
             query += " site:" + window.location.hostname;
         }
-        tabOpenLink(se + encodeURI(query));
+        if (interactive) {
+            Normal.openOmnibar({type: "SearchEngine", extra: alias, pref: query});
+        } else {
+            tabOpenLink(se + encodeURI(query));
+        }
     });
 }
 

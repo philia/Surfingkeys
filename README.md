@@ -83,6 +83,8 @@ The `g` in `sg` is a search alias for google, there are some other built-in sear
 
 Besides that, there is a `sog`, to search selected text only in this site with google. For `sog`, `s` is the search_leader_key, `o` is the only_this_site_key, `g` is the search alias.
 
+The search_leader_key `s` plus captial alias `G` will search selected with google interactively, all other search aliases and those you added through API `addSearchAliasX` work in same way.
+
 ## Vim-like marks
 
 You can create vim-like marks by pressing `m`, followed by a word character(0-9, A-Z, a-z), used as mark name. For example, if you press `ma` on this page, you'll create a mark named `a` which points to this page. Then pressing `'a` anywhere, you'll jump to this page.
@@ -235,6 +237,10 @@ To avoid manually editing PAC script and reloading/switching profile by clicking
 * `spd`, shortcut for `:setProxyMode direct`
 
 * `spi`, shortcut for `:proxyInfo`
+
+## ACE VIM editor
+
+`su` to open an ACE editor in vim mode to edit current URL, then `:w` to open the new URL.
 
 ## Edit your own settings
 
