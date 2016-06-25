@@ -1,308 +1,16 @@
-var frontendUI = (function() {
-    var self = {
-        ports: {}
-    };
-    self.postMessage = function(to, message) {
-        self.ports[to].postMessage(message);
-    };
-    self.flush = function() {
-        self.postMessage('top', {
-            frameHeight: getFrameHeight()
-        });
-    };
-
-    self.omnibar = $('#sk_omnibar').hide();
-    self.statusBar = $('#sk_status').hide();
-    var frameElement = $("<div class=sk_frame>").appendTo('body').hide();
-    var _usage = $('<div id=sk_usage>').appendTo('body').hide();
-    var _popup = $('<div id=sk_popup>').appendTo('body').hide();
-    var _editor = $('<div id=sk_editor>').appendTo('body').hide();
-    var ue = ace.edit("sk_editor");
-    ace.config.loadModule('ace/ext/language_tools', function (mod) {
-        ue.setOptions({
-            enableBasicAutocompletion: true,
-            enableLiveAutocompletion: false,
-            enableSnippets: false
-        });
-    });
-    ue.setTheme("ace/theme/chrome");
-    ue.setKeyboardHandler('ace/keyboard/vim', function() {
-        var cm = ue.state.cm;
-        cm.on('vim-mode-change', function(data) {
-            if (data.mode === "normal") {
-                Events.includeNode(ue.container);
-            } else {
-                Events.excludeNode(ue.container);
-            }
-        });
-        ue.on('blur', function(evt, el) {
-            var exDialog = $(el.container).find('div.ace_dialog-bottom');
-            if (exDialog.length === 0) {
-                // not in command line mode
-                self.hidePopup();
-            }
-        });
-        var Vim = cm.constructor.Vim;
-        Vim.defineEx("write", "w", function(cm, input) {
-            var wf = new Function('ue', "var v = ue.getValue(); ({0})(v);".format(ue.write));
-            wf(ue);
-        });
-        Vim.map('<CR>', ':w', 'normal')
-        Vim.map('<Tab>', '<C-Space>', 'insert')
-    });
-    ue.container.style.background="#f1f1f1";
-    ue.getSession().setMode("ace/mode/javascript");
-    ue.renderer.setOption('showLineNumbers', false);
-    ue.$blockScrolling = Infinity;
-    var _tabs = $("<div class=sk_tabs><div class=sk_tabs_fg></div><div class=sk_tabs_bg></div></div>").appendTo('body').hide();
-    var banner = $('<div id=sk_banner/>').appendTo('body').hide();
-    var _bubble = $("<div class=sk_bubble>").html("<div class=sk_bubble_content></div>").appendTo('body').hide();
-    $("<div class=sk_arrow>").html("<div class=sk_arrowdown></div><div class=sk_arrowdown_inner></div>").css('position', 'absolute').css('top', '100%').appendTo(_bubble);
-    var keystroke = $('<div id=sk_keystroke/>').appendTo('body').hide();
-
-    var displays = [self.omnibar, frameElement, _usage, _tabs, banner, _bubble, _popup, _editor, self.statusBar, keystroke];
-    function getFrameHeight() {
-        for (var i = 0; i < displays.length; i++) {
-            if (displays[i].is(':visible')) {
-                return '100%';
-            }
-        }
-        return '0px';
-    }
-    var _display;
-    self.hidePopup = function() {
-        if (_display && _display.is(':visible')) {
-            _display.hide();
-            self.flush();
-            _display.onHide && _display.onHide();
-        }
-    }
-    function showPopup(td, args) {
-        if (_display && _display.is(':visible')) {
-            _display.hide();
-            _display.onHide && _display.onHide();
-        }
-        _display = td;
-        _display.show();
-        self.flush();
-        _display.onShow && _display.onShow(args);
-        window.focus();
-    }
-
-    runtime.actions['highlightElement'] = function(message) {
-        var rect = message.rect;
-        frameElement.css('top', rect.top).css('left', rect.left).css('width', rect.width).css('height', rect.height).show();
-        self.flush();
-        setTimeout(function() {
-            frameElement.hide();
-            self.flush();
-        }, message.duration);
-    };
-
-    _tabs.onShow = function(tabs) {
-        var tabs_fg = _tabs.find('div.sk_tabs_fg');
-        tabs_fg.html("");
-        _tabs.trie = new Trie('', Trie.SORT_NONE);
-        var hintLabels = Hints.genLabels(tabs.length);
-        var tabstr = "<div class=sk_tab style='max-width: {0}px'>".format(window.innerWidth - 50);
-        var items = tabs.forEach(function(t, i) {
-            var tab = $(tabstr);
-            _tabs.trie.add(hintLabels[i].toLowerCase(), t.id);
-            tab.html("<div class=sk_tab_hint>{0}</div><div class=sk_tab_wrap><div class=sk_tab_icon><img src='{1}'></div><div class=sk_tab_title>{2}</div></div>".format(hintLabels[i], t.favIconUrl, htmlEncode(t.title)));
-            tab.data('url', t.url);
-            tabs_fg.append(tab);
-        })
-        tabs_fg.find('div.sk_tab').each(function() {
-            $(this).css('width', $(this).width() + 10);
-            $(this).append($("<div class=sk_tab_url>{0}</div>".format($(this).data('url'))));
-        });
-        _tabs.find('div.sk_tabs_bg').css('width', window.innerWidth).css('height', window.innerHeight);
-    }
-    runtime.actions['chooseTab'] = function(message) {
-        runtime.command({
-            action: 'getTabs'
-        }, function(response) {
-            if (response.tabs.length > runtime.settings.tabsThreshold) {
-                showPopup(self.omnibar, {type: 'Tabs'});
-            } else {
-                showPopup(_tabs, response.tabs);
-            }
-        });
-    };
-    _usage.onShow = function(message) {
-        _usage.html(message.content);
-    };
-    runtime.actions['showUsage'] = function(message) {
-        showPopup(_usage, message);
-    };
-    _popup.onShow = function(message) {
-        _popup.html(message.content);
-    };
-    runtime.actions['showPopup'] = function(message) {
-        showPopup(_popup, message);
-    };
-    _editor.onShow = function(message) {
-        ue.write = message.onWrite;
-        ue.setValue(message.content, -1);
-        $(ue.container).find('textarea').focus();
-    };
-    runtime.actions['showEditor'] = function(message) {
-        showPopup(_editor, message);
-    };
-    runtime.actions['openOmnibar'] = function(message) {
-        showPopup(self.omnibar, message);
-    };
-    runtime.actions['openFinder'] = function(message) {
-        Find.open();
-    };
-    runtime.actions['showBanner'] = function(message) {
-        banner.html(message.content).show();
-        self.flush();
-        banner.finish();
-        banner.animate({
-            "top": "0"
-        }, 300);
-        banner.delay(message.linger_time || 1000).animate({
-            "top": "-3rem"
-        }, 300, function() {
-            banner.html("").hide();
-            self.flush();
-        });
-    };
-    runtime.actions['showBubble'] = function(message) {
-        var pos = message.position;
-        _bubble.find('div.sk_bubble_content').html(message.content);
-        _bubble.show();
-        self.flush();
-        var w = _bubble.width(),
-            h = _bubble.height();
-        var left = [pos.left - w / 2, w / 2];
-        if (left[0] < 0) {
-            left[1] += left[0];
-            left[0] = 0;
-        } else if ((left[0] + w) > window.innerWidth) {
-            left[1] += left[0] - window.innerWidth + w;
-            left[0] = window.innerWidth - w;
-        }
-        _bubble.find('div.sk_arrow').css('left', left[1]);
-        _bubble.css('top', pos.top - h - 12).css('left', left[0]);
-    };
-    runtime.actions['hideBubble'] = function(message) {
-        _bubble.hide();
-        self.flush();
-    };
-    runtime.actions['showStatus'] = function(message) {
-        StatusBar.show(message.position, message.content);
-    };
-
-    var clipboard_holder = $('<textarea id=sk_clipboard/>');
-    clipboard_holder = clipboard_holder[0];
-    runtime.actions['getContentFromClipboard'] = function(message) {
-        var result = '';
-        document.body.appendChild(clipboard_holder);
-        clipboard_holder.value = '';
-        clipboard_holder.select();
-        if (document.execCommand('paste')) {
-            result = clipboard_holder.value;
-        }
-        clipboard_holder.value = '';
-        clipboard_holder.remove();
-        return result;
-    };
-    runtime.actions['writeClipboard'] = function(message) {
-        document.body.appendChild(clipboard_holder);
-        clipboard_holder.value = message.content;
-        clipboard_holder.select();
-        document.execCommand('copy');
-        clipboard_holder.value = '';
-        clipboard_holder.remove();
-    };
-    runtime.actions['hideKeystroke'] = function(message) {
-        keystroke.animate({
-            right: "-2rem"
-        }, 300, function() {
-            keystroke.html("");
-            keystroke.hide();
-            self.flush();
-        });
-    };
-    runtime.actions['showKeystroke'] = function(message) {
-        keystroke.show();
-        self.flush();
-        if (keystroke.is(':animated')) {
-            keystroke.finish()
-        }
-        var keys = keystroke.html() + message.key;
-        keystroke.html(keys);
-        if (keystroke.css('right') !== '0') {
-            keystroke.animate({
-                right: 0
-            }, 300);
-        }
-    };
-
-    self.initPort = function(message) {
-        self.ports[message.from] = event.ports[0];
-    };
-
-    self.handleMessage = function(event) {
-        var _message = event.data;
-        if (_message.action) {
-            if (self.hasOwnProperty(_message.action)) {
-                var ret = self[_message.action](_message) || {};
-                ret.id = _message.id;
-                if (_message.from && self.ports[_message.from]) {
-                    self.ports[_message.from].postMessage(ret);
-                }
-            }
-        }
-    };
-
-    self.handleKeyEvent = function(event, key) {
-        var handled = false;
-        switch (event.keyCode) {
-            case KeyboardUtils.keyCodes.ESC:
-                handled = self.hidePopup();
-                break;
-            default:
-                if (_tabs.trie) {
-                    _tabs.trie = _tabs.trie.find(key);
-                    if (!_tabs.trie) {
-                        self.hidePopup();
-                        _tabs.trie = null;
-                    } else if (_tabs.trie.meta.length) {
-                        RUNTIME('focusTab', {
-                            tab_id: _tabs.trie.meta[0]
-                        });
-                        self.hidePopup();
-                        _tabs.trie = null;
-                    }
-                    handled = true;
-                }
-                break;
-        }
-        return handled;
-    };
-
-    Events.keydownHandlers.unshift(self);
-    delete Events.focusHandlers.getBackFocusOnLoad;
-    return self;
-})();
-
 function _filterByTitleOrUrl(urls, query) {
     if (query && query.length) {
+        var query = query.toUpperCase();
         urls = urls.filter(function(b) {
-            return b.title.indexOf(query) !== -1 || (b.url && b.url.indexOf(query) !== -1);
+            return b.title.toUpperCase().indexOf(query) !== -1 || (b.url && b.url.toUpperCase().indexOf(query) !== -1);
         });
     }
     return urls;
 }
 
 var Omnibar = (function(ui) {
-    var self = {};
+    var self = {bookmarkFolders: {}};
     var handlers = {};
-
-    self.miniQuery = {};
 
     var lastInput, handler, lastHandler = null;
     ui.on('click', function(event) {
@@ -352,7 +60,6 @@ var Omnibar = (function(ui) {
 
 
     self.input = ui.find('input');
-    Events.excludeNode(self.input[0]);
     self.promptSpan = ui.find('#sk_omnibarSearchArea>span');
     self.resultsDiv = ui.find('#sk_omnibarSearchResult');
     self.input.on('input', function() {
@@ -365,6 +72,7 @@ var Omnibar = (function(ui) {
         }
         if (event.keyCode === KeyboardUtils.keyCodes.ESC) {
             frontendUI.hidePopup();
+            event.preventDefault();
         } else if (event.keyCode === KeyboardUtils.keyCodes.enter) {
             handler.activeTab = !event.ctrlKey;
             handler.onEnter() && frontendUI.hidePopup();
@@ -394,16 +102,40 @@ var Omnibar = (function(ui) {
         }
     };
 
-    self.listBookmark = function(items, showFolder) {
-        self.listResults(items, function(b) {
+    self.highlight = function(str) {
+        return str.replace(new RegExp(Omnibar.input.val(), 'gi'), function(m) {
+            return "<span class=omnibar_highlight>" + m + "</span>";
+        });
+    };
+
+    /**
+     * List URLs like {url: "https://github.com", title: "github.com"} beneath omnibar
+     * @param {Array} items - Array of url items with title.
+     * @param {boolean} showFolder - True to show a item as folder if it has no property url.
+     *
+     */
+    self.listURLs = function(items, showFolder) {
+        var sliced = items.slice(0, (runtime.settings.omnibarMaxResults || 20));
+        self.listResults(sliced, function(b) {
             var li = $('<li/>');
             if (b.hasOwnProperty('url')) {
-                var type = b.type || (b.hasOwnProperty('lastVisitTime') ? "☼" : "☆");
                 b.title = (b.title && b.title !== "") ? b.title : b.url;
-                li.html('<div class="title">{0} {1}</div>'.format(type, htmlEncode(b.title)));
-                $('<div class="url">').data('url', b.url).html(b.url).appendTo(li);
+                var type = b.type, additional = "";
+                if (!type) {
+                    if (b.hasOwnProperty('lastVisitTime')) {
+                        type = "☼";
+                        additional = "<span class=omnibar_timestamp>@ {0}</span>".format(timeStampString(b.lastVisitTime));
+                    } else if(b.hasOwnProperty('dateAdded')) {
+                        type = "☆";
+                        additional = "<span class=omnibar_folder>@ {0}</span>".format(self.bookmarkFolders[b.parentId] || "");
+                    } else {
+                        type = "▤";
+                    }
+                }
+                li.html('<div class="title">{0} {1} {2}</div>'.format(type, self.highlight(htmlEncode(b.title)), additional));
+                $('<div class="url">').data('url', b.url).html(self.highlight(b.url)).appendTo(li);
             } else if (showFolder) {
-                li.html('<div class="title">▷ {0}</div>'.format(b.title)).data('folder_name', b.title).data('folderId', b.id);
+                li.html('<div class="title">▷ {0}</div>'.format(self.highlight(b.title))).data('folder_name', b.title).data('folderId', b.id);
             }
             return li;
         });
@@ -412,6 +144,8 @@ var Omnibar = (function(ui) {
     ui.onShow = function(args) {
         handler = handlers[args.type];
         self.input[0].focus();
+        Insert.suppressKeyEsc = false;
+        Insert.enter();
         if (args.pref) {
             self.input.val(args.pref);
         }
@@ -429,6 +163,8 @@ var Omnibar = (function(ui) {
         self.resultsDiv.html("");
         lastHandler = null;
         handler.onClose && handler.onClose();
+        Insert.exit();
+        Insert.suppressKeyEsc = true;
         handler = null;
     };
 
@@ -495,6 +231,18 @@ var Omnibar = (function(ui) {
         handlers[name] = hdl;
     };
 
+    self.listBookmarkFolders = function(cb) {
+        runtime.command({
+            action: 'getBookmarkFolders'
+        }, function(response) {
+            self.bookmarkFolders = {};
+            response.folders.forEach(function(f) {
+                self.bookmarkFolders[f.id] = f.title;
+            });
+            cb && cb(response);
+        });
+    };
+
     return self;
 })(frontendUI.omnibar);
 
@@ -553,9 +301,11 @@ var OpenBookmarks = (function() {
     };
 
     self.onOpen = function() {
-        runtime.command({
-            action: 'getBookmarks',
-        }, self.onResponse);
+        Omnibar.listBookmarkFolders(function() {
+            runtime.command({
+                action: 'getBookmarks',
+            }, self.onResponse);
+        });
     };
 
     self.onClose = function() {
@@ -605,7 +355,7 @@ var OpenBookmarks = (function() {
                 return !b.hasOwnProperty('url');
             });
         }
-        Omnibar.listBookmark(items, true);
+        Omnibar.listURLs(items, true);
         Omnibar.scrollIntoView();
     };
 
@@ -616,13 +366,18 @@ Omnibar.addHandler('Bookmarks', OpenBookmarks);
 var AddBookmark = (function() {
     var self = {
         prompt: 'add bookmark≫'
-    };
+    }, folders;
 
     self.onOpen = function(arg) {
         self.page = arg;
-        runtime.command({
-            action: 'getBookmarkFolders',
-        }, self.onResponse);
+        Omnibar.listBookmarkFolders(function(response) {
+            folders = response.folders;
+            selectedFolder = folders[0];
+            Omnibar.listResults(folders, function(f) {
+                return $('<li/>').data('folder', f).html("▷ {0}".format(f.title));
+            });
+            Omnibar.scrollIntoView();
+        });
     };
 
     self.onClose = function() {
@@ -662,7 +417,6 @@ var AddBookmark = (function() {
         return true;
     };
 
-    var folders;
     self.onInput = function() {
         var query = $(this).val();
         var matches = folders.filter(function(b) {
@@ -672,14 +426,6 @@ var AddBookmark = (function() {
             return $('<li/>').data('folder', f).html("▷ {0}".format(f.title));
         });
     };
-    self.onResponse = function(response) {
-        folders = response.folders;
-        selectedFolder = folders[0];
-        Omnibar.listResults(folders, function(f) {
-            return $('<li/>').data('folder', f).html("▷ {0}".format(f.title));
-        });
-        Omnibar.scrollIntoView();
-    };
 
     return self;
 })();
@@ -688,27 +434,25 @@ Omnibar.addHandler('AddBookmark', AddBookmark);
 var OpenHistory = (function() {
     var self = {
         prompt: 'history≫'
-    };
+    }, all;
 
-    var all;
     self.onOpen = function(arg) {
         runtime.command({
             action: 'getHistory',
             query: {
                 startTime: 0,
-                maxResults: runtime.settings.maxResults,
                 text: ""
             }
         }, function(response) {
             all = response.history;
-            Omnibar.listBookmark(response.history, false);
+            Omnibar.listURLs(response.history, false);
         });
     };
 
     self.onEnter = Omnibar.openFocused.bind(self);
     self.onInput = function() {
         var filtered = _filterByTitleOrUrl(all, $(this).val());
-        Omnibar.listBookmark(filtered, false);
+        Omnibar.listURLs(filtered, false);
     };
     return self;
 })();
@@ -717,21 +461,32 @@ Omnibar.addHandler('History', OpenHistory);
 var OpenURLs = (function() {
     var self = {
         prompt: '≫'
-    };
+    }, all;
 
     function _queryURLs(word) {
         runtime.command({
             action: self.action,
-            maxResults: runtime.settings.maxResults,
             query: word
         }, function(response) {
-            Omnibar.listBookmark(response.urls, false);
+            all = response.urls;
+            Omnibar.listURLs(response.urls, false);
         });
+        if (self.action === "getTopSites") {
+            Omnibar.listBookmarkFolders(function() {
+                runtime.command({
+                    action: 'getAllURLs'
+                }, function(response) {
+                    all = all.concat(response.urls);
+                });
+            });
+        }
     }
     self.onOpen = function(arg) {
         self.action = arg;
         if (self.action === "getRecentlyClosed") {
             self.prompt = 'Recently closed≫';
+        } else if (self.action === "getTabURLs") {
+            self.prompt = 'Tab History≫';
         } else {
             self.prompt = '≫';
         }
@@ -739,7 +494,8 @@ var OpenURLs = (function() {
     };
     self.onEnter = Omnibar.openFocused.bind(self);
     self.onInput = function() {
-        _queryURLs($(this).val());
+        var filtered = _filterByTitleOrUrl(all, $(this).val());
+        Omnibar.listURLs(filtered, false);
     };
     return self;
 })();
@@ -806,7 +562,7 @@ var OpenVIMarks = (function() {
                 });
             }
         }
-        Omnibar.listBookmark(urls, false);
+        Omnibar.listURLs(urls, false);
     };
     self.onEnter = Omnibar.openFocused.bind(self);
     self.onInput = self.onOpen;

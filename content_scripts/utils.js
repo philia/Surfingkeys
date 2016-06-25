@@ -1,3 +1,9 @@
+function timeStampString(t) {
+    var dt = new Date();
+    dt.setTime(t);
+    return dt.toLocaleString();
+}
+
 function generateQuickGuid() {
     return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 }
@@ -10,7 +16,10 @@ function htmlDecode(str) {
     return $('<div/>').html(str).text();
 }
 function isEditable(element) {
-    return element.localName === 'input' || element.localName === 'textarea' || element.localName === 'select' || element.isContentEditable;
+    return element.localName === 'textarea'
+        || element.localName === 'select'
+        || element.isContentEditable
+        || (element.localName === 'input' && /^(?!button|checkbox|file|hidden|image|radio|reset|submit)/i.test(element.type));
 }
 
 String.prototype.format = function() {

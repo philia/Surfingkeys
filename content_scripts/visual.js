@@ -1,8 +1,56 @@
-var Visual = (function() {
-    var self = {};
-    self.name = "Visual";
+var Visual = (function(mode) {
+    var self = $.extend({name: "Visual", eventListeners: {}}, mode);
+
+    self.addEventListener('keydown', function(event) {
+        var updated = "";
+        if (event.keyCode === KeyboardUtils.keyCodes.ESC) {
+            if (state > 1) {
+                cursor.remove();
+                selection.collapse(selection.anchorNode, selection.anchorOffset);
+                showCursor();
+            } else {
+                hideCursor();
+                clear();
+                self.exit();
+            }
+            state--;
+            showStatus(2, status[state]);
+            updated = "stopEventPropagation";
+        } else if (event.sk_keyName.length) {
+            updated = Normal._handleMapKey.call(self, event.sk_keyName);
+        }
+        return updated;
+    });
+
+    self.addEventListener('click', function(event) {
+        switch (selection.type) {
+            case "None":
+                hideCursor();
+                state = 0;
+                break;
+            case "Caret":
+                if (state) {
+                    hideCursor();
+                    if (state === 0) {
+                        state = 1;
+                    }
+                    showCursor();
+                }
+                break;
+            case "Range":
+                if (state) {
+                    hideCursor();
+                    state = 2;
+                    showCursor();
+                }
+                break;
+        }
+        showStatus(2, status[state]);
+    });
+
     self.mappings = new Trie('', Trie.SORT_NONE);
     self.map_node = self.mappings;
+    self.repeats = "";
     self.mappings.add("l", {
         annotation: "forward character",
         feature_group: 9,
@@ -112,38 +160,13 @@ var Visual = (function() {
         state = 0,
         status = ['', 'Caret', 'Range'],
         mark_template = $('<surfingkeys_mark>')[0],
-        cursor = $('<div class="surfingkeys_cursor"/>')[0];
+        cursor = $('<div class="surfingkeys_cursor"></div>')[0];
 
-    document.addEventListener('click', function(event) {
-        switch (selection.type) {
-            case "None":
-                hideCursor();
-                state = 0;
-                break;
-            case "Caret":
-                if (state) {
-                    hideCursor();
-                    if (state === 0) {
-                        state = 1;
-                    }
-                    showCursor();
-                }
-                break;
-            case "Range":
-                if (state) {
-                    hideCursor();
-                    state = 2;
-                    showCursor();
-                }
-                break;
-        }
-        showStatus(2, status[state]);
-    });
-
-    function showStatus(pos, msg) {
+    function showStatus(pos, msg, duration) {
         runtime.frontendCommand({
             action: "showStatus",
             content: msg,
+            duration: duration,
             position: pos
         });
     }
@@ -272,11 +295,10 @@ var Visual = (function() {
     }
 
     function scrollIntoView() {
-        var ff = cursor;
-        var front = $(ff).offset();
-        if (front.top < document.body.scrollTop || (front.top + $(ff).height()) > (document.body.scrollTop + window.innerHeight) || front.left < document.body.scrollLeft || (front.left + $(ff).width()) > (document.body.scrollLeft + window.innerWidth)) {
-            window.scrollTo($(ff).offset().left, $(ff).offset().top - window.innerHeight / 2);
-        }
+        // set content of cursor to enable scrollIntoViewIfNeeded
+        $(cursor).html('|');
+        cursor.scrollIntoViewIfNeeded();
+        $(cursor).html('');
     }
 
     function highlight(pattern) {
@@ -348,11 +370,13 @@ var Visual = (function() {
             case 2:
                 hideCursor();
                 selection.collapse(selection.focusNode, selection.focusOffset);
+                self.exit();
                 break;
             default:
                 var pos = getStartPos();
                 selection.setPosition(pos[0], pos[1]);
                 showCursor();
+                self.enter();
                 break;
         }
         state = (state + 1) % 3;
@@ -373,33 +397,6 @@ var Visual = (function() {
         }
     };
 
-    var _handleMapKey = Normal._handleMapKey.bind(self);
-    self.handleKeyEvent = function(event, key) {
-        var updated = false;
-        if (state) {
-            if (event.keyCode === KeyboardUtils.keyCodes.ESC) {
-                if (state > 1) {
-                    cursor.remove();
-                    selection.collapse(selection.anchorNode, selection.anchorOffset);
-                    showCursor();
-                } else {
-                    hideCursor();
-                    clear();
-                }
-                state--;
-                showStatus(2, status[state]);
-                updated = true;
-            } else {
-                updated = _handleMapKey(key);
-            }
-        } else {
-            if (event.keyCode === KeyboardUtils.keyCodes.ESC) {
-                showStatus(-1, "");
-            }
-        }
-        return updated;
-    };
-
     self.next = function(backward) {
         if (matches.length) {
             currentOccurrence = (backward ? (matches.length + currentOccurrence - 1) : (currentOccurrence + 1)) % matches.length;
@@ -408,12 +405,7 @@ var Visual = (function() {
         } else if (runtime.settings.findHistory.length) {
             var query = runtime.settings.findHistory[0];
             highlight(new RegExp(query, "g" + (caseSensitive ? "" : "i")));
-            if (matches.length) {
-                state = 1;
-                showStatus(2, status[state]);
-                hideCursor();
-                select(matches[currentOccurrence]);
-            }
+            _visualEnter(query);
         }
     };
 
@@ -428,14 +420,19 @@ var Visual = (function() {
     runtime.actions['visualClear'] = function(message) {
         clear();
     };
-    runtime.actions['visualEnter'] = function(message) {
+
+    function _visualEnter(query) {
         if (matches.length) {
             state = 1;
-            select(matches[currentOccurrence]);
             showStatus(2, status[state]);
+            select(matches[currentOccurrence]);
+            self.enter();
         } else {
-            showStatus(3, "Pattern not found: {0}".format(message.query));
+            showStatus(3, "Pattern not found: {0}".format(query), 1000);
         }
+    }
+    runtime.actions['visualEnter'] = function(message) {
+        _visualEnter(message.query);
     };
     return self;
-})();
+})(Mode);

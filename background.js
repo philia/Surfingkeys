@@ -7,6 +7,7 @@ var Service = (function() {
         tabActivated = {},
         tabMessages = {},
         frameIncs = {},
+        tabURLs = {},
         tabHistory = [],
         tabHistoryIndex = 0,
         historyTabAction = false,
@@ -14,7 +15,8 @@ var Service = (function() {
         frontEndURL = chrome.extension.getURL('/pages/frontend.html');
 
     var settings = {
-        maxResults: 500,
+        focusOnSaved: true,
+        omnibarMaxResults: 20,
         tabsThreshold: 9,
         repeatThreshold: 99,
         tabsMRUOrder: true,
@@ -153,6 +155,7 @@ var Service = (function() {
                 chrome.storage.local.clear();
                 chrome.storage.sync.clear();
             }
+            triggerEvent(document, "settingsReady");
         } else {
             extendSettings(data);
             if (data.storage === 'sync') {
@@ -162,8 +165,8 @@ var Service = (function() {
                     } else {
                         extendSettings(data);
                         settings.storage = "sync";
-                        triggerEvent(document, "settingsReady");
                     }
+                    triggerEvent(document, "settingsReady");
                 });
             } else {
                 triggerEvent(document, "settingsReady");
@@ -387,6 +390,21 @@ var Service = (function() {
             });
         })
     };
+    self.getAllURLs = function(message, sender, sendResponse) {
+        chrome.bookmarks.getRecent(2147483647, function(tree) {
+            var urls = tree;
+            chrome.history.search({
+                startTime: 0,
+                maxResults: 2147483647,
+                text: ""
+            }, function(tree) {
+                urls = urls.concat(tree);
+                _response(message, sendResponse, {
+                    urls: urls
+                });
+            });
+        });
+    };
     self.getTabs = function(message, sender, sendResponse) {
         var tab = sender.tab;
         chrome.tabs.query({
@@ -559,6 +577,7 @@ var Service = (function() {
         }
     };
     self.getHistory = function(message, sender, sendResponse) {
+        message.query.maxResults = 2147483647;
         chrome.history.search(message.query, function(tree) {
             _response(message, sendResponse, {
                 history: tree
@@ -777,6 +796,25 @@ var Service = (function() {
             _response(message, sendResponse, {
                 response: result
             });
+        });
+    };
+    self.tabURLAccessed = function(message, sender, sendResponse) {
+        var tabId = sender.tab.id;
+        if (!tabURLs.hasOwnProperty(tabId)) {
+            tabURLs[tabId] = {};
+        }
+        tabURLs[tabId][message.url] = message.title;
+    };
+    self.getTabURLs = function(message, sender, sendResponse) {
+        var tabURL = tabURLs[sender.tab.id] || {};
+        tabURL = Object.keys(tabURL).map(function(u) {
+            return {
+                url: u,
+                title: tabURL[u]
+            };
+        });
+        _response(message, sendResponse, {
+            urls: tabURL
         });
     };
 

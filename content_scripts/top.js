@@ -18,7 +18,18 @@ var frontendFrame = (function() {
             from: 'top'
         }, frontEndURL, [this.channel.port2]);
         self.contentWindow = this.contentWindow;
+        runtime.frontendCommand({
+            action: 'pageContentReady',
+            content: document.body.innerText
+        });
     }
+    self.actions['ace_editor_saved'] = function(response) {
+        Normal.onEditorSaved(response.data);
+        if (runtime.settings.focusOnSaved && isEditable(Normal.elementBehindEditor)) {
+            Normal.elementBehindEditor.focus();
+            Insert.enter();
+        }
+    };
     self.create = function() {
         ifr[0].channel = new MessageChannel();
         ifr[0].channel.port1.onmessage = function(message) {
@@ -31,6 +42,7 @@ var frontendFrame = (function() {
                 self.actions[response.action](response);
             }
             ifr.css('height', response.frameHeight);
+            ifr.css('pointer-events', response.pointerEvents);
             if (response.frameHeight === '0px') {
                 uiHost.blur();
             }
@@ -65,9 +77,19 @@ $(document).on('surfingkeys:settingsApplied', function(e) {
         action: 'setSurfingkeysIcon',
         status: Events.isBlacklisted()
     });
+    runtime.command({
+        action: 'tabURLAccessed',
+        title: document.title,
+        url: window.location.href
+    });
 });
 
 document.addEventListener('DOMContentLoaded', function(e) {
+    var fakeBody = $('body[createdBySurfingkeys=1]');
+    if (fakeBody.length) {
+        fakeBody.remove();
+        frontendFrame.contentWindow = null;
+    }
     createFrontEnd();
     setTimeout(function() {
         for (var p in AutoCommands) {
@@ -78,9 +100,15 @@ document.addEventListener('DOMContentLoaded', function(e) {
         }
     }, 0);
 });
-function createFrontEnd(event) {
+function createFrontEnd() {
     var frontendReady = frontendFrame.contentWindow && frontendFrame.contentWindow.top === top;
-    if (!frontendReady && document.body) {
+    if (!frontendReady) {
+        if (!document.body) {
+            var dom = document.implementation.createDocument('http://www.w3.org/1999/xhtml', 'html', null);
+            var body = dom.createElement("body");
+            $(body).attr('createdBySurfingkeys', 1);
+            document.documentElement.appendChild(body);
+        }
         frontendFrame.create();
         frontendReady = true;
     }
