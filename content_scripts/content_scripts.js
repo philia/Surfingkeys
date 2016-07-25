@@ -85,8 +85,9 @@ function _parseAnnotation(ag) {
     return ag;
 }
 
-function _mapkey(mode, keys, annotation, jscode, extra_chars, domain) {
-    if (!domain || domain.test(window.location.origin)) {
+function _mapkey(mode, keys, annotation, jscode, options) {
+    options = options || {};
+    if (!options.domain || options.domain.test(window.location.origin)) {
         mode.mappings.remove(keys);
         if (typeof(jscode) === 'string') {
             jscode = new Function(jscode);
@@ -99,21 +100,22 @@ function _mapkey(mode, keys, annotation, jscode, extra_chars, domain) {
             code: jscode,
             annotation: ag.annotation,
             feature_group: ag.feature_group,
-            extra_chars: extra_chars
+            repeatIgnore: options.repeatIgnore,
+            extra_chars: options.extra_chars
         });
     }
 }
 
-function mapkey(keys, annotation, jscode, extra_chars, domain) {
-    _mapkey(Normal, keys, annotation, jscode, extra_chars, domain);
+function mapkey(keys, annotation, jscode, options) {
+    _mapkey(Normal, keys, annotation, jscode, options);
 }
 
-function vmapkey(keys, annotation, jscode, extra_chars, domain) {
-    _mapkey(Visual, keys, annotation, jscode, extra_chars, domain);
+function vmapkey(keys, annotation, jscode, options) {
+    _mapkey(Visual, keys, annotation, jscode, options);
 }
 
-function imapkey(keys, annotation, jscode, extra_chars, domain) {
-    _mapkey(Insert, keys, annotation, jscode, extra_chars, domain);
+function imapkey(keys, annotation, jscode, options) {
+    _mapkey(Insert, keys, annotation, jscode, options);
 }
 
 function map(new_keystroke, old_keystroke, domain, new_annotation) {
@@ -146,6 +148,8 @@ function map(new_keystroke, old_keystroke, domain, new_annotation) {
                     feature_group: ag.feature_group,
                     extra_chars: meta.extra_chars
                 });
+            } else if (old_keystroke in Mode.specialKeys) {
+                Mode.specialKeys[old_keystroke] = new_keystroke;
             }
         }
     }
@@ -188,22 +192,27 @@ function walkPageUrl(step) {
     }
 }
 
-function tabOpenLink(url) {
-    if (/^(?:https?:\/\/)?(?:[^@\/\n]+@)?(?:www\.)?([^:\/\n]+)/im.test(url)) {
-        if (/^\w+?:\/\//i.test(url)) {
-            url = url
-        } else {
-            url = "http://" + url;
+function tabOpenLink(str) {
+    var urls = str.trim().split('\n').slice(0, 10).forEach(function(url) {
+        url = url.trim();
+        if (url.length > 0) {
+            if (/^(?:https?:\/\/)?(?:[^@\/\n]+@)?(?:www\.)?([^:\/\n]+)/im.test(url)) {
+                if (/^\w+?:\/\//i.test(url)) {
+                    url = url
+                } else {
+                    url = "http://" + url;
+                }
+            } else {
+                url = 'https://www.google.com/search?q=' + url;
+            }
+            RUNTIME("openLink", {
+                tab: {
+                    tabbed: true
+                },
+                position: runtime.settings.newTabPosition,
+                url: url
+            });
         }
-    } else {
-        url = 'https://www.google.com/search?q=' + url;
-    }
-    RUNTIME("openLink", {
-        tab: {
-            tabbed: true
-        },
-        position: runtime.settings.newTabPosition,
-        url: url
     });
 }
 

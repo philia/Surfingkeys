@@ -2,27 +2,24 @@ var frontendUI = (function(mode) {
     var self = $.extend({name: "frontendUI", eventListeners: {}, ports: {}}, mode);
     self.addEventListener('keydown', function(event) {
         var handled = "";
-        switch (event.keyCode) {
-            case KeyboardUtils.keyCodes.ESC:
-                self.hidePopup();
-                handled = "stopEventPropagation";
-                break;
-            default:
-                if (_tabs.trie) {
-                    _tabs.trie = _tabs.trie.find(event.sk_keyName);
-                    if (!_tabs.trie) {
-                        self.hidePopup();
-                        _tabs.trie = null;
-                    } else if (_tabs.trie.meta.length) {
-                        RUNTIME('focusTab', {
-                            tab_id: _tabs.trie.meta[0]
-                        });
-                        self.hidePopup();
-                        _tabs.trie = null;
-                    }
-                    handled = "stopEventPropagation";
+        if (event.sk_keyName === Mode.specialKeys["<Esc>"]) {
+            self.hidePopup();
+            handled = "stopEventPropagation";
+        } else {
+            if (_tabs.trie) {
+                _tabs.trie = _tabs.trie.find(event.sk_keyName);
+                if (!_tabs.trie) {
+                    self.hidePopup();
+                    _tabs.trie = null;
+                } else if (_tabs.trie.meta.length) {
+                    RUNTIME('focusTab', {
+                        tab_id: _tabs.trie.meta[0]
+                    });
+                    self.hidePopup();
+                    _tabs.trie = null;
                 }
-                break;
+                handled = "stopEventPropagation";
+            }
         }
         return handled;
     });
@@ -261,13 +258,14 @@ var frontendUI = (function(mode) {
 })(Mode);
 
 var AceEditor = (function(mode, elmId) {
+    $('#' + elmId).css('height', '30%');
     var self = ace.edit(elmId);
     self = $.extend(self, mode);
     self = $.extend(self, {name: "AceEditor", eventListeners: {}, mode: 'normal'});
 
     self.addEventListener('keydown', function(event) {
         event.sk_suppressed = true;
-        if (event.keyCode === KeyboardUtils.keyCodes.ESC
+        if (event.sk_keyName === Mode.specialKeys["<Esc>"]
             && self.mode === 'normal' // vim in normal mode
             && !self.state.cm.state.vim.inputState.operator // and no pending normal operation
             && (!self.completer || !self.completer.activated) // and completion popup not opened
@@ -364,6 +362,16 @@ var AceEditor = (function(mode, elmId) {
             enableSnippets: false
         });
     });
+    self._getValue = function() {
+        var val = self.getValue();
+        if (self.type === 'select') {
+            // get current line
+            val = self.session.getLine(self.selection.lead.row);
+            val = val.match(/.*>< ([^<]*)$/);
+            val = val ? val[1] : "";
+        }
+        return val;
+    };
     self.setTheme("ace/theme/chrome");
     self.setKeyboardHandler('ace/keyboard/vim', function() {
         var cm = self.state.cm;
@@ -374,13 +382,13 @@ var AceEditor = (function(mode, elmId) {
         self.Vim.defineEx("write", "w", function(cm, input) {
             frontendUI.postMessage('top', {
                 action: 'ace_editor_saved',
-                data: self.getValue()
+                data: self._getValue()
             });
         });
         self.Vim.defineEx("wq", "wq", function(cm, input) {
             frontendUI.postMessage('top', {
                 action: 'ace_editor_saved',
-                data: self.getValue()
+                data: self._getValue()
             });
             frontendUI.hidePopup();
         });
@@ -397,23 +405,22 @@ var AceEditor = (function(mode, elmId) {
         $(self.container).find('textarea').focus();
         self.enter();
         self.Vim.map('<CR>', ':wq', 'insert')
+        self.type = message.type;
+        self.setFontSize(16);
         if (message.type === 'url') {
             self.renderer.setOption('showLineNumbers', false);
             self.language_tools.setCompleters([urlCompleter]);
-            self.css('height', '');
-            self.setFontSize(24);
+            self.css('height', '30%');
         } else if (message.type === 'input') {
             self.renderer.setOption('showLineNumbers', false);
             self.language_tools.setCompleters([pageWordCompleter]);
             self.css('height', '');
-            self.setFontSize('24pt');
         } else {
             self.renderer.setOption('showLineNumbers', true);
             self.language_tools.setCompleters([pageWordCompleter]);
             self.Vim.unmap('<CR>', 'insert')
             self.Vim.map('<C-CR>', ':wq', 'insert')
             self.css('height', '30%');
-            self.setFontSize('14pt');
         }
         self.Vim.map('<C-d>', '<C-w>', 'insert')
         self.Vim.exitInsertMode(self.state.cm);

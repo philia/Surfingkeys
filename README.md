@@ -25,6 +25,7 @@ Surfingkeys is created with all settings described in Javascript, so it's easy f
 * [Hotkey to toggle Surfingkeys](#hotkey-to-toggle-surfingkeys)
 * [Proxy settings](#proxy-settings)
 * [VIM editor](#vim-editor)
+* [Dot to repeat previous action](#dot-to-repeat-previous-action)
 * [Edit your own settings](#edit-your-own-settings)
 * [Build](#build)
 * [License](#license)
@@ -41,6 +42,7 @@ Surfingkeys is created with all settings described in Javascript, so it's easy f
 * A versatile bookmark/url finder
 * Count prefixes to repeat actions
 * Use vim editor to edit input on page
+* Dot to repeat previous action
 
 ## Quick start
 
@@ -214,9 +216,19 @@ Usually, you need not count the number, you just prefix a large number such as `
 
 ## Hotkey to toggle Surfingkeys
 
-By default, `alt-s` will toggle Surfingkeys for current site. When Surfingkeys is turned off, all mappings stop working except the hotkey. To change hotkey, use settings below:
+By default, `Alt-s` will toggle Surfingkeys for current site. When Surfingkeys is turned off, all mappings stop working except the hotkey. To change hotkey, use settings below:
 
-    Events.hotKey = 'i'; // hotkey must be one keystroke with/without modifier, it can not be a sequence of keystrokes like `gg`.
+    map('<Ctrl-i>', '<Alt-s>'); // hotkey must be one keystroke with/without modifier, it can not be a sequence of keystrokes like `gg`.
+
+When Surfingkeys is turned off on some site by `Alt-s`, the status will be persisted in settings, for example,
+
+    "blacklist": {
+        "https://github.com": 1
+    },
+
+`Alt-s` once more will remove it from settings.blacklist. By the way, `yj` to dump all settings into clipboard.
+
+Another way to disable Surfingkeys is to use `settings.blacklistPattern`, please refer to [regex for disabling](https://github.com/brookhong/Surfingkeys/issues/63).
 
 ## Proxy settings
 
@@ -293,28 +305,40 @@ Remember that in insert mode, press `Ctrl-i` to open vim editor.
 
 `se` to open settings editor, `:w` to save settings.
 
+## Dot to repeat previous action
+
+[Repeating previous actions](https://github.com/brookhong/Surfingkeys/issues/67)
+
+All keystrokes in normal mode are repeatable by dot, except those keystrokes mapped with `repeatIgnore` as `true`, for example,
+
+    mapkey('e', '#2Scroll a page up', 'Normal.scroll("pageUp")', {repeatIgnore: true});
+
+Then `.` will not repeat action to page up, even `e` is just pressed.
+
 ## Edit your own settings
 
 ### Map a keystroke to some action
 
-    mapkey(keystroke, help_string, action_code, [expect_char], [domain_pattern])
+    mapkey(keystroke, help_string, action_code, [options])
 
 | parameter  | explanation |
 |:---------------| :-----|
 |**keystroke**                   | string, any keystroke to trigger the action|
 |**help_string**                 | string, a help message to describe the action, which will displayed in help opened by `u`.|
 |**action_code**                 | string or function, action code can be a snippet of Javascript code or a Javascript function.|
-|**expect_char**                 | boolean[optional], whether the next key input is used as parameter of action_code, please see `m` or `'` for example.|
-|**domain_pattern**              | regex[optional], a Javascript regex pattern to identify the domains that this mapping works, for example, `/github\.com/i` says that this mapping works only for github.com.|
+|**options**                     | object, properties listed below|
+|**extra_chars**                 | boolean[optional], whether the next key input is used as parameter of action_code, please see `m` or `'` for example.|
+|**domain**                      | regex[optional], a Javascript regex pattern to identify the domains that this mapping works, for example, `/github\.com/i` says that this mapping works only for github.com.|
+|**repeatIgnore**                | boolean[optional], whether this keystroke will be repeat by dot command.|
 
 Just an example to map one keystroke to different functions on different sites,
 
-    mapkey('zz', 'Choose a tab', 'Normal.chooseTab()', 0, /github\.com/i);
-    mapkey('zz', 'Show usage', 'Normal.showUsage()', 0, /google\.com/i);
+    mapkey('zz', 'Choose a tab', 'Normal.chooseTab()', {domain: /github\.com/i});
+    mapkey('zz', 'Show usage', 'Normal.showUsage()', {domain: /google\.com/i});
 
 mapkey in visual mode
 
-    vmapkey(keystroke, help_string, action_code, [expect_char], [domain_pattern])
+    vmapkey(keystroke, help_string, action_code, [options])
 
 ### map a keystroke to another
 

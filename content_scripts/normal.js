@@ -1,5 +1,9 @@
 var Mode = (function() {
     var self = {}, mode_stack = [];
+    self.specialKeys = {
+        "<Alt-s>": "<Alt-s>",       // hotkey to toggleBlacklist
+        "<Esc>": "<Esc>"
+    };
 
     self.addEventListener = function(evt, handler) {
         var mode_name = this.name;
@@ -49,10 +53,10 @@ var Mode = (function() {
         }
 
         pushModes(mode_stack);
-        var modes = mode_stack.map(function(m) {
-            return m.name;
-        }).join('->');
-        console.log('enter {0}, {1}'.format(this.name, modes));
+        // var modes = mode_stack.map(function(m) {
+            // return m.name;
+        // }).join('->');
+        // console.log('enter {0}, {1}'.format(this.name, modes));
     };
 
     self.exit = function() {
@@ -62,10 +66,10 @@ var Mode = (function() {
             var popup = mode_stack.slice(0, pos);
             popModes(popup);
             mode_stack = mode_stack.slice(pos);
-            var modes = mode_stack.map(function(m) {
-                return m.name;
-            }).join('->');
-            console.log('exit {0}, {1}'.format(this.name, modes));
+            // var modes = mode_stack.map(function(m) {
+                // return m.name;
+            // }).join('->');
+            // console.log('exit {0}, {1}'.format(this.name, modes));
         }
     };
 
@@ -82,7 +86,7 @@ var Disabled = (function(mode) {
     self.addEventListener('keydown', function(event) {
         // prevent this event to be handled by Surfingkeys' other listeners
         event.sk_suppressed = true;
-        if (event.sk_keyName === Events.hotKey) {
+        if (event.sk_keyName === Mode.specialKeys["<Alt-s>"]) {
             Normal.toggleBlacklist(window.location.origin);
             self.exit();
             return "stopEventPropagation";
@@ -130,7 +134,7 @@ var Insert = (function(mode) {
     self.addEventListener('keydown', function(event) {
         // prevent this event to be handled by Surfingkeys' other listeners
         event.sk_suppressed = true;
-        if (event.keyCode === KeyboardUtils.keyCodes.ESC) {
+        if (event.sk_keyName === Mode.specialKeys["<Esc>"]) {
             document.activeElement.blur();
             self.exit();
             return self.suppressKeyEsc ? "stopEventPropagation" : "";
@@ -156,10 +160,10 @@ var Normal = (function(mode) {
         var handled;
         if (isEditable(event.target)) {
             Insert.enter();
-        } else if (event.keyCode === KeyboardUtils.keyCodes.ESC) {
+        } else if (event.sk_keyName === Mode.specialKeys["<Esc>"]) {
             self.finish();
             handled = "stopEventPropagation";
-        } else if (event.sk_keyName === Events.hotKey) {
+        } else if (event.sk_keyName === Mode.specialKeys["<Alt-s>"]) {
             self.toggleBlacklist(window.location.origin);
             handled = "stopEventPropagation";
         } else if (event.sk_keyName.length) {
@@ -205,7 +209,8 @@ var Normal = (function(mode) {
     self.surfingkeysHold = 0;
 
     var stepSize = 70,
-        scrollNodes, scrollIndex = 0;
+        scrollNodes, scrollIndex = 0,
+        lastKeys;
 
     function easeFn(t, b, c, d) {
         // t: current time, b: begInnIng value, c: change In value, d: duration
@@ -450,6 +455,12 @@ var Normal = (function(mode) {
         if (typeof(element) === "string") {
             content = element;
             self.elementBehindEditor = document.body;
+        } else if (type === 'select') {
+            var options = $(element).find('option').map(function() {
+                return "{0} >< {1}".format($(this).text(), $(this).val());
+            }).toArray();
+            content = options.join('\n');
+            self.elementBehindEditor = element;
         } else {
             content = $(element).val();
             self.elementBehindEditor = element;
@@ -548,6 +559,7 @@ var Normal = (function(mode) {
             if (key == "<Esc>" || key == "<Ctrl-[>") {
                 finish();
             } else {
+                this.setLastKeys && this.setLastKeys(this.map_node.meta[0].word + key);
                 var pf = this.pendingMap.bind(this);
                 setTimeout(function() {
                     pf(key);
@@ -578,6 +590,7 @@ var Normal = (function(mode) {
                             key: key
                         });
                     } else {
+                        this.setLastKeys && this.setLastKeys(this.map_node.meta[0].word);
                         RUNTIME.repeats = parseInt(this.repeats) || 1;
                         setTimeout(function() {
                             while(RUNTIME.repeats > 0) {
@@ -605,6 +618,46 @@ var Normal = (function(mode) {
                 self._handleMapKey(keys[i]);
             }
         }, 1);
+    };
+
+    self.setLastKeys = function(key) {
+        if (!this.map_node.meta[0].repeatIgnore) {
+            lastKeys = [key];
+            saveLastKeys();
+        }
+    };
+
+    function saveLastKeys() {
+        RUNTIME('updateSettings', {
+            settings: {
+                lastKeys: lastKeys
+            }
+        });
+    }
+
+    self.appendKeysForRepeat = function(mode, keys) {
+        if (lastKeys.length > 0) {
+            // keys for normal mode must be pushed.
+            lastKeys.push('{0}\t{1}'.format(mode, keys));
+            saveLastKeys();
+        }
+    };
+
+    self.repeatLast = function() {
+        // lastKeys in format: <keys in normal mode>[,(<mode name>\t<keys in this mode>)*], examples
+        // ['se']
+        // ['f', 'Hints\tBA']
+        lastKeys = settings.lastKeys;
+        self.feedkeys(lastKeys[0]);
+        var modeKeys = lastKeys.slice(1);
+        for (var i = 0; i < modeKeys.length; i++) {
+            var modeKey = modeKeys[i].split('\t');
+            if (modeKey[0] === 'Hints') {
+                setTimeout(function() {
+                    Hints.feedkeys(modeKey[1]);
+                }, 120 + i*100);
+            }
+        }
     };
 
     self.addVIMark = function(mark, url) {

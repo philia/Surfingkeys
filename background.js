@@ -711,9 +711,6 @@ var Service = (function() {
         _quit();
     };
     self.createSession = function(message, sender, sendResponse) {
-        settings.sessions[message.name] = {
-            'tabs': []
-        };
         chrome.tabs.query({}, function(tabs) {
             var tabGroup = {};
             tabs.forEach(function(tab) {
@@ -732,6 +729,7 @@ var Service = (function() {
                     tabg.push(tabGroup[k]);
                 }
             }
+            settings.sessions[message.name] = {};
             settings.sessions[message.name]['tabs'] = tabg;
             _updateSettings({
                 sessions: settings.sessions
@@ -878,6 +876,16 @@ var Service = (function() {
                 }
             };
             chrome.proxy.settings.set( {value: config, scope: 'regular'}, function() {
+            });
+        }
+    };
+    self.setZoom = function(message, sender, sendResponse) {
+        var tabId = sender.tab.id;
+        if (message.zoomFactor == 0) {
+            chrome.tabs.setZoom(tabId, 1);
+        } else {
+            chrome.tabs.getZoom(tabId, function(zf) {
+                chrome.tabs.setZoom(tabId, zf + message.zoomFactor);
             });
         }
     };

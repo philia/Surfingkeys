@@ -85,10 +85,30 @@ command('feedkeys', 'feed mapkeys', function(keys) {
 });
 map('g0', ':feedkeys 99E', 0, "#3Go to the first tab");
 map('g$', ':feedkeys 99R', 0, "#3Go to the last tab");
+mapkey('zr', '#3zoom reset', function() {
+    RUNTIME('setZoom', {
+        zoomFactor: 0
+    });
+});
+mapkey('zi', '#3zoom in', function() {
+    RUNTIME('setZoom', {
+        zoomFactor: 0.1
+    });
+});
+mapkey('zo', '#3zoom out', function() {
+    RUNTIME('setZoom', {
+        zoomFactor: -0.1
+    });
+});
+
 command('quit', '#5quit chrome', function() {
     RUNTIME('quit');
 });
 map('ZQ', ':quit');
+mapkey(".", '#0Repeat last action', Normal.repeatLast, {repeatIgnore: true});
+mapkey("<Ctrl-2>", '#0Show last action', function() {
+    Normal.showPopup(htmlEncode(settings.lastKeys.join('\n')));
+}, {repeatIgnore: true});
 mapkey('ZZ', '#5Save session and quit', function() {
     RUNTIME('createSession', {
         name: 'LAST',
@@ -104,16 +124,16 @@ mapkey('T', '#3Choose a tab', 'Normal.chooseTab()');
 mapkey('?', '#0Show usage', 'Normal.showUsage()');
 mapkey('<Ctrl-i>', '#0Show usage', 'Normal.showUsage()');
 mapkey('u', '#0Show usage', 'Normal.showUsage()');
-mapkey('e', '#2Scroll a page up', 'Normal.scroll("pageUp")');
-mapkey('d', '#2Scroll a page down', 'Normal.scroll("pageDown")');
-mapkey('j', '#2Scroll down', 'Normal.scroll("down")');
-mapkey('k', '#2Scroll up', 'Normal.scroll("up")');
-mapkey('h', '#2Scroll left', 'Normal.scroll("left")');
-mapkey('l', '#2Scroll right', 'Normal.scroll("right")');
-mapkey('gg', '#2Scroll to the top of the page', 'Normal.scroll("top")');
-mapkey('G', '#2Scroll to the bottom of the page', 'Normal.scroll("bottom")');
-mapkey('0', '#2Scroll all the way to the left', 'Normal.scroll("leftmost")');
-mapkey('$', '#2Scroll all the way to the right', 'Normal.scroll("rightmost")');
+mapkey('e', '#2Scroll a page up', 'Normal.scroll("pageUp")', {repeatIgnore: true});
+mapkey('d', '#2Scroll a page down', 'Normal.scroll("pageDown")', {repeatIgnore: true});
+mapkey('j', '#2Scroll down', 'Normal.scroll("down")', {repeatIgnore: true});
+mapkey('k', '#2Scroll up', 'Normal.scroll("up")', {repeatIgnore: true});
+mapkey('h', '#2Scroll left', 'Normal.scroll("left")', {repeatIgnore: true});
+mapkey('l', '#2Scroll right', 'Normal.scroll("right")', {repeatIgnore: true});
+mapkey('gg', '#2Scroll to the top of the page', 'Normal.scroll("top")', {repeatIgnore: true});
+mapkey('G', '#2Scroll to the bottom of the page', 'Normal.scroll("bottom")', {repeatIgnore: true});
+mapkey('0', '#2Scroll all the way to the left', 'Normal.scroll("leftmost")', {repeatIgnore: true});
+mapkey('$', '#2Scroll all the way to the right', 'Normal.scroll("rightmost")', {repeatIgnore: true});
 mapkey('cs', '#2Change scroll target', 'Normal.changeScrollTarget()');
 // define all the css selectors that can be followed
 Hints.pointers = "a, button, *:visible:css(cursor=pointer), select:visible, input:visible, textarea:visible";
@@ -128,7 +148,7 @@ mapkey('ya', '#7Copy a link URL to the clipboard', function() {
 });
 mapkey('i', '#1Go to edit box', 'Hints.create("input:visible, textarea:visible, *[contenteditable=true]", Hints.dispatchMouseClick)');
 mapkey('I', '#1Go to edit box with vim editor', function() {
-    Hints.create("input:visible, textarea:visible, *[contenteditable=true]", function(element, event) {
+    Hints.create("input:visible, textarea:visible, *[contenteditable=true], select:visible", function(element, event) {
         Normal.showEditor(element, function(data) {
             $(element).val(data);
         }, element.localName);
@@ -144,7 +164,8 @@ mapkey('F', '#4Go one tab history forward', 'RUNTIME("historyTab", {backward: fa
 mapkey('S', '#4Go back in history', 'history.go(-1)');
 mapkey('D', '#4Go forward in history', 'history.go(1)');
 mapkey('r', '#4Reload the page', 'RUNTIME("reloadTab", { nocache: false })');
-mapkey('t', '#8Open an URLs', 'Normal.openOmnibar({type: "URLs", extra: "getTopSites"})');
+mapkey('t', '#8Open an URL', 'Normal.openOmnibar({type: "URLs", extra: "getTopSites"})');
+mapkey('go', '#8Open an URL in current tab', 'Normal.openOmnibar({type: "URLs", extra: "getTopSites", tabbed: false})');
 mapkey('ox', '#8Open recently closed URL', 'Normal.openOmnibar({type: "URLs", extra: "getRecentlyClosed"})');
 mapkey('H', '#8Open opened URL in current tab', 'Normal.openOmnibar({type: "URLs", extra: "getTabURLs"})');
 mapkey('Q', '#8Open omnibar for word translation', function() {
@@ -211,9 +232,9 @@ mapkey('x', '#3Close current tab', 'RUNTIME("closeTab")');
 mapkey('X', '#3Restore closed tab', 'RUNTIME("openLast")');
 mapkey('<Ctrl-1>', '#0show pressed key', function(key) {
     Normal.showPopup(htmlEncode(key));
-}, 1);
-mapkey('m', '#10Add current URL to vim-like marks', Normal.addVIMark, 1);
-mapkey("'", '#10Jump to vim-like mark', Normal.jumpVIMark, 1);
+}, {extra_chars: 1});
+mapkey('m', '#10Add current URL to vim-like marks', Normal.addVIMark, {extra_chars: 1});
+mapkey("'", '#10Jump to vim-like mark', Normal.jumpVIMark, {extra_chars: 1});
 mapkey('<<', '#3Move current tab to left', function() {
     RUNTIME('moveTab', {
         step: -1
@@ -232,13 +253,7 @@ mapkey('cc', '#7Open selected link or link from clipboard', function() {
         tabOpenLink(window.getSelection().toString());
     } else {
         Normal.getContentFromClipboard(function(response) {
-            var links = response.data.split('\n').slice(0, 10);
-            links.forEach(function(u) {
-                u = u.trim();
-                if (u.length > 0) {
-                    tabOpenLink(u);
-                }
-            });
+            tabOpenLink(response.data);
         });
     }
 });
@@ -306,7 +321,9 @@ mapkey('gu', '#4Go up one path in the URL', function() {
     }
     window.location.href = url;
 });
-
+mapkey('g?', '#4Reload current page without query string(all parts after question mark)', function() {
+    window.location.href = window.location.href.replace(/\?[^\?]*$/, '');
+});
 mapkey('gU', '#4Go to root of current URL hierarchy', 'window.location.href = window.location.origin');
 mapkey('se', '#11Edit Settings', 'RUNTIME("editSettings", { tab: { tabbed: true }})');
 mapkey('sr', '#11Reset Settings', 'Normal.resetSettings()');
