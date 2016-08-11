@@ -18,6 +18,7 @@ var Service = (function() {
         focusOnSaved: true,
         omnibarMaxResults: 20,
         tabsThreshold: 9,
+        hintsThreshold: 10000,
         repeatThreshold: 99,
         tabsMRUOrder: true,
         smoothScroll: true,
@@ -886,6 +887,28 @@ var Service = (function() {
         } else {
             chrome.tabs.getZoom(tabId, function(zf) {
                 chrome.tabs.setZoom(tabId, zf + message.zoomFactor);
+            });
+        }
+    };
+    self.removeURL = function(message, sender, sendResponse) {
+        var type = message.uid[0], uid = message.uid.substr(1);
+        if (type === 'B') {
+            chrome.bookmarks.remove(uid, function() {
+                _response(message, sendResponse, {
+                    response: "Done"
+                });
+            });
+        } else if (type === 'H') {
+            chrome.history.deleteUrl({url: uid}, function () {
+                _response(message, sendResponse, {
+                    response: "Done"
+                });
+            });
+        } else if (type === 'T') {
+            chrome.tabs.remove(parseInt(uid), function() {
+                _response(message, sendResponse, {
+                    response: "Done"
+                });
             });
         }
     };

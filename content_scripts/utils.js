@@ -115,23 +115,29 @@ String.prototype.format = function() {
             }
         },
         getKeyChar: function(event) {
-            var character, correctedIdentifiers, keyIdentifier, unicodeKeyInHex;
+            var character;
             if (event.keyCode in this.modifierKeys) {
                 character = "";
             } else {
-                if (event.keyIdentifier.slice(0, 2) !== "U+") {
-                    character = "{0}".format(event.keyIdentifier);
-                } else if (this.keyNames.hasOwnProperty(event.keyCode)) {
+                if (this.keyNames.hasOwnProperty(event.keyCode)) {
                     character = "{0}".format(this.keyNames[event.keyCode]);
                 } else {
-                    keyIdentifier = event.keyIdentifier;
-                    if ((this.platform === "Windows" || this.platform === "Linux") && this.keyIdentifierCorrectionMap[keyIdentifier]) {
-                        correctedIdentifiers = this.keyIdentifierCorrectionMap[keyIdentifier];
-                        keyIdentifier = event.shiftKey ? correctedIdentifiers[1] : correctedIdentifiers[0];
+                    character = event.key;
+                    if (!character) {
+                        // keep for chrome version below 52
+                        if (event.keyIdentifier.slice(0, 2) !== "U+") {
+                            character = "{0}".format(event.keyIdentifier);
+                        } else {
+                            var keyIdentifier = event.keyIdentifier;
+                            if ((this.platform === "Windows" || this.platform === "Linux") && this.keyIdentifierCorrectionMap[keyIdentifier]) {
+                                var correctedIdentifiers = this.keyIdentifierCorrectionMap[keyIdentifier];
+                                keyIdentifier = event.shiftKey ? correctedIdentifiers[1] : correctedIdentifiers[0];
+                            }
+                            var unicodeKeyInHex = "0x" + keyIdentifier.substring(2);
+                            character = String.fromCharCode(parseInt(unicodeKeyInHex));
+                            character = event.shiftKey ? character : character.toLowerCase();
+                        }
                     }
-                    unicodeKeyInHex = "0x" + keyIdentifier.substring(2);
-                    character = String.fromCharCode(parseInt(unicodeKeyInHex));
-                    character = event.shiftKey ? character : character.toLowerCase();
                 }
                 if (event.metaKey) {
                     character = "Meta-" + character;
@@ -148,26 +154,8 @@ String.prototype.format = function() {
             }
             return character;
         },
-        isPrimaryModifierKey: function(event) {
-            if (this.platform === "Mac") {
-                return event.metaKey;
-            } else {
-                return event.ctrlKey;
-            }
-        },
-        isEscape: function(event) {
-            return (event.keyCode === this.keyCodes.ESC) || (event.ctrlKey && this.getKeyChar(event) === '[');
-        },
         isWordChar: function(event) {
             return (event.keyCode < 123 && event.keyCode >= 97 || event.keyCode < 91 && event.keyCode >= 65 || event.keyCode < 58 && event.keyCode >= 48);
-        },
-        isPrintable: function(event) {
-            var keyChar;
-            if (event.metaKey || event.ctrlKey || event.altKey) {
-                return false;
-            }
-            keyChar = event.type === "keypress" ? String.fromCharCode(event.charCode) : this.getKeyChar(event);
-            return keyChar.length === 1;
         }
     };
 

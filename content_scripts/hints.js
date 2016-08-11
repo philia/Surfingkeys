@@ -6,15 +6,22 @@ var Hints = (function(mode) {
         var hints = holder.find('>div');
         if (event.sk_keyName === Mode.specialKeys["<Esc>"]) {
             hide();
+        } else if (event.keyCode === KeyboardUtils.keyCodes.shiftKey) {
+            flip();
         } else if (hints.length > 0) {
             if (event.keyCode === KeyboardUtils.keyCodes.backspace) {
                 prefix = prefix.substr(0, prefix.length - 1);
                 updated = true;
             } else {
                 var key = String.fromCharCode(event.keyCode);
-                if (key !== '' && self.characters.indexOf(key.toLowerCase()) !== -1) {
-                    prefix = prefix + key;
-                    updated = true;
+                if (key !== '') {
+                    if (self.characters.indexOf(key.toLowerCase()) !== -1) {
+                        prefix = prefix + key;
+                        updated = true;
+                    } else {
+                        // quit hints if user presses non-hint key
+                        hide();
+                    }
                 }
             }
             handleHint();
@@ -99,6 +106,21 @@ var Hints = (function(mode) {
         self.exit();
     }
 
+    function flip() {
+        var hints = holder.find('>div');
+        if (hints.css('z-index') == hints.data('z-index')) {
+            hints.each(function(i) {
+                var z = parseInt($(this).css('z-index'));
+                $(this).css('z-index',  hints.length - i + 2147483000 - z);
+            });
+        } else {
+            hints.each(function(i) {
+                var z = $(this).data('z-index');
+                $(this).css('z-index', z);
+            });
+        }
+    }
+
     self.genLabels = function(M) {
         if (M <= self.characters.length) {
             return self.characters.slice(0, M).toUpperCase().split('');
@@ -145,28 +167,40 @@ var Hints = (function(mode) {
         }
         holder.html('');
         style.appendTo(holder);
-        var elements = $(document.body).find(cssSelector).map(function(i) {
+        if (cssSelector === "") {
+            cssSelector = "a, button, select:visible, input:visible, textarea:visible";
+            if (!runtime.settings.hintsThreshold || $('*').length < runtime.settings.hintsThreshold) {
+                // to avoid bad performance when there are too many clickable elements.
+                cssSelector += ", *:visible:css(cursor=pointer)";
+            }
+        }
+        var elements = $(document.body).find(cssSelector).filter(function(i) {
+            var ret = null;
             var elm = this;
-            var r = elm.getBoundingClientRect();
-            if (r.width === 0 || r.height === 0) {
-                var children = $(elm).find('*').filter(function(j) {
-                    var r = this.getBoundingClientRect();
-                    return (r.width > 0 && r.height > 0);
-                });
-                if (children.length) {
-                    elm = children[0];
-                    r = elm.getBoundingClientRect();
+            if ($(elm).attr('disabled') === undefined) {
+                var r = elm.getBoundingClientRect();
+                if (r.width === 0 || r.height === 0) {
+                    var children = $(elm).find('*').filter(function(j) {
+                        var r = this.getBoundingClientRect();
+                        return (r.width > 0 && r.height > 0);
+                    });
+                    if (children.length) {
+                        elm = children[0];
+                        r = elm.getBoundingClientRect();
+                    }
+                }
+                var size = (r.width > 0 && r.height > 0);
+                if (!!r && r.bottom >= 0 && r.right >= 0 && r.top <= document.documentElement.clientHeight && r.left <= document.documentElement.clientWidth && size) {
+                    ret = elm;
                 }
             }
-            var size = (r.width > 0 && r.height > 0);
-            var ret = null;
-            if (!!r && r.bottom >= 0 && r.right >= 0 && r.top <= document.documentElement.clientHeight && r.left <= document.documentElement.clientWidth && size) {
-                ret = elm;
-            }
-            return ret;
+            return ret !== null;
         });
-        elements = elements.filter(function(i) {
-            return this !== null;
+        elements = elements.filter(function() {
+            // filter out element which has his children covered
+            return !$(this.children).toArray().some(function(element, index, array) {
+                return elements.toArray().indexOf(element) !== -1;
+            });
         });
         if (elements.length > 0) {
             var hintLabels = self.genLabels(elements.length);
@@ -175,7 +209,8 @@ var Hints = (function(mode) {
                 var pos = $(this).offset(),
                     z = getZIndex(this);
                 var link = $('<div/>').css('top', pos.top - bof.top).css('left', pos.left - bof.left + $(this).width() / 2)
-                    .css('z-index', z + 2)
+                    .css('z-index', z + 9999)
+                    .data('z-index', z + 9999)
                     .data('label', hintLabels[i])
                     .data('link', this)
                     .data('onhint', onHintKey)
@@ -195,6 +230,9 @@ var Hints = (function(mode) {
             }
             holder.appendTo('body');
             self.enter();
+        }
+        if (elements.length === 1) {
+            handleHint();
         }
     };
 

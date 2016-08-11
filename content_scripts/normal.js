@@ -2,6 +2,7 @@ var Mode = (function() {
     var self = {}, mode_stack = [];
     self.specialKeys = {
         "<Alt-s>": "<Alt-s>",       // hotkey to toggleBlacklist
+        "<Ctrl-d>": "<Ctrl-d>",     // hotkey to delete from omnibar
         "<Esc>": "<Esc>"
     };
 
@@ -19,6 +20,7 @@ var Mode = (function() {
                 }
             }
         };
+        return this;
     };
 
     function popModes(modes) {
@@ -96,6 +98,19 @@ var Disabled = (function(mode) {
     return self;
 })(Mode);
 
+var PassThrough = (function(mode) {
+    var self = $.extend({name: "PassThrough", eventListeners: {}}, mode);
+
+    self.addEventListener('keydown', function(event) {
+        // prevent this event to be handled by Surfingkeys' other listeners
+        event.sk_suppressed = true;
+    }).addEventListener('mousedown', function(event) {
+        event.sk_suppressed = true;
+    });
+
+    return self;
+})(Mode);
+
 var GetBackFocus = (function(mode) {
     var self = $.extend({name: "GetBackFocus", eventListeners: {}}, mode);
 
@@ -129,7 +144,6 @@ var Insert = (function(mode) {
 
     self.mappings = new Trie('', Trie.SORT_NONE);
     self.map_node = self.mappings;
-    self.suppressKeyEsc = true;
 
     self.addEventListener('keydown', function(event) {
         // prevent this event to be handled by Surfingkeys' other listeners
@@ -137,7 +151,7 @@ var Insert = (function(mode) {
         if (event.sk_keyName === Mode.specialKeys["<Esc>"]) {
             document.activeElement.blur();
             self.exit();
-            return self.suppressKeyEsc ? "stopEventPropagation" : "";
+            return "stopEventPropagation";
         } else if (!isEditable(event.target)) {
             self.exit();
         } else if (event.sk_keyName.length) {
@@ -660,23 +674,37 @@ var Normal = (function(mode) {
         }
     };
 
+    var localMarks = {};
     self.addVIMark = function(mark, url) {
-        url = url || window.location.href;
-        runtime.settings.marks[mark] = {
-            url: url,
-            scrollLeft: document.body.scrollLeft,
-            scrollTop: document.body.scrollTop
-        };
-        RUNTIME('updateSettings', {
-            settings: {
-                marks: runtime.settings.marks
-            }
-        });
-        self.showBanner("Mark '{0}' added for: {1}.".format(htmlEncode(mark), url));
+        if (/^[a-z]$/.test(mark)) {
+            // local mark
+            localMarks[mark] = {
+                scrollLeft: document.body.scrollLeft,
+                scrollTop: document.body.scrollTop
+            };
+        } else {
+            // global mark
+            url = url || window.location.href;
+            runtime.settings.marks[mark] = {
+                url: url,
+                scrollLeft: document.body.scrollLeft,
+                scrollTop: document.body.scrollTop
+            };
+            RUNTIME('updateSettings', {
+                settings: {
+                    marks: runtime.settings.marks
+                }
+            });
+            self.showBanner("Mark '{0}' added for: {1}.".format(htmlEncode(mark), url));
+        }
     };
 
     self.jumpVIMark = function(mark) {
-        if (runtime.settings.marks.hasOwnProperty(mark)) {
+        if (localMarks.hasOwnProperty(mark)) {
+            var markInfo = localMarks[mark];
+            document.body.scrollLeft = markInfo.scrollLeft;
+            document.body.scrollTop = markInfo.scrollTop;
+        } else if (runtime.settings.marks.hasOwnProperty(mark)) {
             var markInfo = runtime.settings.marks[mark];
             if (typeof(markInfo) === "string") {
                 markInfo = {
