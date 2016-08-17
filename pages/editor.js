@@ -349,6 +349,7 @@ var AceEditor = (function(mode, elmId) {
         var words = message.content.split(splitRegex);
         var wordScores = {};
         words.forEach(function(word) {
+            word = "sk_" + word;
             if (wordScores.hasOwnProperty(word)) {
                 wordScores[word]++;
             } else {
@@ -357,6 +358,7 @@ var AceEditor = (function(mode, elmId) {
         });
 
         wordsOnPage = Object.keys(wordScores).map(function(w) {
+            w = w.substr(3);
             return {
                 caption: w,
                 value: w,
@@ -431,10 +433,13 @@ var AceEditor = (function(mode, elmId) {
                 data: self._getValue()
             });
             frontendUI.hidePopup();
+            // tell vim editor that command is done
+            self.state.cm.signal('vim-command-done', '')
         });
         self.Vim.map('<CR>', ':wq', 'normal')
         self.Vim.defineEx("quit", "q", function(cm, input) {
             frontendUI.hidePopup();
+            self.state.cm.signal('vim-command-done', '')
         });
     });
     self.container.style.background="#f1f1f1";
@@ -466,6 +471,17 @@ var AceEditor = (function(mode, elmId) {
         self.setReadOnly(message.type === 'select');
         self.Vim.map('<C-d>', '<C-w>', 'insert')
         self.Vim.exitInsertMode(self.state.cm);
+
+        // set cursor at initial line
+        self.state.cm.setCursor(message.initial_line, 0);
+        self.state.cm.ace.renderer.scrollCursorIntoView();
+        // reset undo
+        setTimeout( function () {
+            self.renderer.session.$undoManager.reset();
+        }, 1);
+
+        self.state.cm.ace.setOption('indentedSoftWrap', false);
+        self.state.cm.ace.setOption('wrap', true);
     };
 
     self.css = function(name, value) {

@@ -11,10 +11,10 @@ var Service = (function() {
         tabHistory = [],
         tabHistoryIndex = 0,
         historyTabAction = false,
-        optionsURL = chrome.extension.getURL('/pages/options.html'),
         frontEndURL = chrome.extension.getURL('/pages/frontend.html');
 
     var settings = {
+        useLocalMarkdownAPI: true,                         // use local js to parse markdown own, or use github markdown API
         focusOnSaved: true,
         omnibarMaxResults: 20,
         tabsThreshold: 9,
@@ -40,15 +40,20 @@ var Service = (function() {
     };
     var newTabUrl = "chrome://newtab/";
 
-    function request(method, url) {
+    function request(url, headers, data) {
+        headers = headers || {};
         return new Promise(function(acc, rej) {
             var xhr = new XMLHttpRequest();
+            var method = (data !== undefined) ? "POST" : "GET";
             xhr.open(method, url);
+            for (var h in headers) {
+                xhr.setRequestHeader(h, headers[h]);
+            }
             xhr.onload = function() {
                 acc(xhr.responseText);
             };
             xhr.onerror = rej.bind(null, xhr);
-            xhr.send();
+            xhr.send(data);
         });
     }
 
@@ -145,6 +150,7 @@ var Service = (function() {
             port.postMessage({
                 action: 'initSettings',
                 settings: settings,
+                extensionURLRoot: chrome.extension.getURL(''),
                 extension_id: chrome.i18n.getMessage("@@extension_id")
             });
         });
@@ -214,6 +220,7 @@ var Service = (function() {
             port.postMessage({
                 action: 'initSettings',
                 settings: settings,
+                extensionURLRoot: chrome.extension.getURL(''),
                 extension_id: chrome.i18n.getMessage("@@extension_id")
             });
         }
@@ -340,7 +347,7 @@ var Service = (function() {
     }
 
     function _loadSettingsFromUrl(url) {
-        var s = request('get', url);
+        var s = request(url);
         s.then(function(resp) {
             _updateSettings({localPath: url, snippets: resp}, false);
         });
@@ -639,10 +646,6 @@ var Service = (function() {
             settings: settings
         });
     };
-    self.editSettings = function(message, sender, sendResponse) {
-        message.url = optionsURL;
-        self.openLink(message, sender, sendResponse);
-    };
     self.updateSettings = function(message, sender, sendResponse) {
         _updateSettings(message.settings, message.noack);
     };
@@ -664,7 +667,7 @@ var Service = (function() {
         });
     };
     self.request = function(message, sender, sendResponse) {
-        var s = request(message.method, message.url);
+        var s = request(message.url, message.headers, message.data);
         s.then(function(res) {
             _response(message, sendResponse, {
                 text: res

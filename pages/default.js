@@ -122,7 +122,6 @@ mapkey('ZR', '#5Restore last session', function() {
 });
 mapkey('T', '#3Choose a tab', 'Normal.chooseTab()');
 mapkey('?', '#0Show usage', 'Normal.showUsage()');
-mapkey('<Ctrl-i>', '#0Show usage', 'Normal.showUsage()');
 mapkey('u', '#0Show usage', 'Normal.showUsage()');
 mapkey('e', '#2Scroll a page up', 'Normal.scroll("pageUp")', {repeatIgnore: true});
 mapkey('d', '#2Scroll a page down', 'Normal.scroll("pageDown")', {repeatIgnore: true});
@@ -145,7 +144,7 @@ mapkey('ya', '#7Copy a link URL to the clipboard', function() {
         Normal.writeClipboard(element.href);
     })
 });
-mapkey('i', '#1Go to edit box', 'Hints.create("input:visible, textarea:visible, *[contenteditable=true]", Hints.dispatchMouseClick)');
+mapkey('i', '#1Go to edit box', 'Hints.create("input:visible, textarea:visible, *[contenteditable=true], select:visible", Hints.dispatchMouseClick)');
 mapkey('I', '#1Go to edit box with vim editor', function() {
     Hints.create("input:visible, textarea:visible, *[contenteditable=true], select:visible", function(element, event) {
         Normal.showEditor(element, function(data) {
@@ -153,6 +152,7 @@ mapkey('I', '#1Go to edit box with vim editor', function() {
         }, element.localName);
     });
 });
+map('<Ctrl-i>', 'I');
 mapkey('q', '#1Click on an Image or a button', 'Hints.create("img, button", Hints.dispatchMouseClick)');
 mapkey('E', '#3Go one tab left', 'RUNTIME("previousTab")');
 mapkey('R', '#3Go one tab right', 'RUNTIME("nextTab")');
@@ -325,9 +325,10 @@ mapkey('g?', '#4Reload current page without query string(all parts after questio
     window.location.href = window.location.href.replace(/\?[^\?]*$/, '');
 });
 mapkey('gU', '#4Go to root of current URL hierarchy', 'window.location.href = window.location.origin');
-mapkey('se', '#11Edit Settings', 'RUNTIME("editSettings", { tab: { tabbed: true }})');
+mapkey('se', '#11Edit Settings', 'tabOpenLink(runtime.extensionURLRoot + "pages/options.html")');
 mapkey('sr', '#11Reset Settings', 'Normal.resetSettings()');
 mapkey('si', '#12Open Chrome Inpect', 'tabOpenLink("chrome://inspect/#devices")');
+mapkey('sm', '#11Preview markdown', 'tabOpenLink(runtime.extensionURLRoot + "pages/github-markdown.html")');
 mapkey('su', '#4Edit current URL with vim editor', function() {
     Normal.showEditor(window.location.href, function(data) {
         tabOpenLink(data);
