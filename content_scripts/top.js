@@ -1,8 +1,5 @@
 var frontendFrame = (function() {
-    var self = {
-        successById: {},
-        actions: {}
-    };
+    var self = {};
     var uiHost = document.createElement("div");
     var frontEndURL = chrome.runtime.getURL('pages/frontend.html');
     var ifr = $('<iframe allowtransparency=true frameborder=0 scrolling=no class=sk_ui src="{0}" />'.format(frontEndURL));
@@ -18,27 +15,26 @@ var frontendFrame = (function() {
             from: 'top'
         }, frontEndURL, [this.channel.port2]);
         self.contentWindow = this.contentWindow;
-        runtime.frontendCommand({
-            action: 'style',
-            css: runtime.settings.theme || ""
-        });
         $(document).trigger("surfingkeys:frontendReady");
     }
+
+    self.setFrontFrame = function(response) {
+        ifr.css('height', response.frameHeight);
+        ifr.css('pointer-events', response.pointerEvents);
+        if (response.frameHeight === '0px') {
+            uiHost.blur();
+        }
+    };
     self.create = function() {
         ifr[0].channel = new MessageChannel();
         ifr[0].channel.port1.onmessage = function(message) {
-            var response = message.data;
-            if (self.successById[response.id]) {
-                var f = self.successById[response.id];
-                delete self.successById[response.id];
-                f(response);
-            } else if (self.actions[response.action]) {
-                self.actions[response.action](response);
-            }
-            ifr.css('height', response.frameHeight);
-            ifr.css('pointer-events', response.pointerEvents);
-            if (response.frameHeight === '0px') {
-                uiHost.blur();
+            var _message = message.data;
+            if (_message.action && self.hasOwnProperty(_message.action)) {
+                var ret = self[_message.action](_message);
+                if (ret) {
+                    _message.data = ret;
+                    self.contentWindow.postMessage(_message, frontEndURL);
+                }
             }
         };
         ifr[0].removeEventListener("load", initPort, false);
@@ -50,35 +46,35 @@ var frontendFrame = (function() {
     return self;
 })();
 
-$(document).on('surfingkeys:settingsApplied', function(e) {
-    runtime.runtime_handlers['getBlacklist'] = function(msg, sender, response) {
-        response({
-            "all": runtime.settings.blacklist.hasOwnProperty('.*'),
-            "this": runtime.settings.blacklist.hasOwnProperty(window.location.origin),
-            "origin": window.location.origin
+runtime.command({
+    action: 'getSettings',
+    key: ['blacklist', 'blacklistPattern']
+}, function(response) {
+    if (checkBlackList(response.settings)) {
+        runtime.command({
+            action: 'setSurfingkeysIcon',
+            status: true
         });
-    };
-    runtime.runtime_handlers['toggleBlacklist'] = function(msg, sender, response) {
-        Normal.toggleBlacklist(msg.origin);
-        response({
-            "all": runtime.settings.blacklist.hasOwnProperty('.*'),
-            "this": runtime.settings.blacklist.hasOwnProperty(window.location.origin),
-            "origin": window.location.origin
-        });
-    };
+    }
+});
 
-    runtime.command({
-        action: 'setSurfingkeysIcon',
-        status: Events.isBlacklisted()
-    });
+runtime.on('settingsUpdated', function(response) {
+    if ('blacklist' in response.settings) {
+        runtime.command({
+            action: 'setSurfingkeysIcon',
+            status: checkBlackList(response.settings)
+        });
+    }
+});
+
+document.addEventListener('DOMContentLoaded', function(e) {
+
     runtime.command({
         action: 'tabURLAccessed',
         title: document.title,
         url: window.location.href
     });
-});
 
-document.addEventListener('DOMContentLoaded', function(e) {
     var fakeBody = $('body[createdBySurfingkeys=1]');
     if (fakeBody.length) {
         fakeBody.remove();

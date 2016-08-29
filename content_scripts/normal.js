@@ -16,7 +16,9 @@ var Mode = (function() {
             if (!event.hasOwnProperty('sk_suppressed')) {
                 var ret = handler(event);
                 if (ret === "stopEventPropagation") {
-                    window.stopEventPropagation(event, true);
+                    event.stopImmediatePropagation();
+                    event.preventDefault();
+                    this.stopKeyupPropagation = true;
                 }
             }
         };
@@ -187,9 +189,9 @@ var Normal = (function(mode) {
     });
     self.addEventListener('keyup', function(event) {
         Normal.surfingkeysHold = 0;
-        if (window.stopKeyupPropagation) {
+        if (self.stopKeyupPropagation) {
             event.stopImmediatePropagation();
-            window.stopKeyupPropagation = false;
+            self.stopKeyupPropagation = false;
         }
     });
     self.addEventListener('pushState', function(event) {
@@ -205,15 +207,8 @@ var Normal = (function(mode) {
     });
 
     self.toggleBlacklist = function(domain) {
-        if (runtime.settings.blacklist.hasOwnProperty(domain)) {
-            delete runtime.settings.blacklist[domain];
-        } else {
-            runtime.settings.blacklist[domain] = 1;
-        }
-        RUNTIME('updateSettings', {
-            settings: {
-                blacklist: runtime.settings.blacklist
-            }
+        RUNTIME('toggleBlacklist', {
+            domain: domain
         });
     };
 
@@ -233,7 +228,7 @@ var Normal = (function(mode) {
 
     function initScroll(elm) {
         elm.skScrollBy = function(x, y, d) {
-            if (runtime.settings.smoothScroll) {
+            if (runtime.conf.smoothScroll) {
                 elm.smoothScrollBy(x, y, d);
             } else {
                 elm.scrollLeft = elm.scrollLeft + x;
@@ -311,56 +306,6 @@ var Normal = (function(mode) {
         return nodes;
     }
 
-    var feature_groups = [
-        'Help',                  // 0
-        'Mouse Click',           // 1
-        'Scroll Page / Element', // 2
-        'Tabs',                  // 3
-        'Page Navigation',       // 4
-        'Sessions',              // 5
-        'Search selected with',  // 6
-        'Clipboard',             // 7
-        'Omnibar',               // 8
-        'Visual Mode',           // 9
-        'vim-like marks',        // 10
-        'Settings',              // 11
-        'Chrome URLs',           // 12
-        'Proxy',                 // 13
-        'Misc',                  // 14
-        'Insert Mode',           // 15
-    ];
-    function renderMappings() {
-        var div = $("<div></div>");
-        var help_groups = feature_groups.map(function(){return [];});
-        [ Normal.mappings, Visual.mappings, Insert.mappings ].map(function(mappings) {
-            var words = mappings.getWords();
-            for (var i = 0; i < words.length; i++) {
-                var w = words[i];
-                var meta = mappings.find(w).meta[0];
-                var item = "<div><span class=kbd-span><kbd>{0}</kbd></span><span class=annotation>{1}</span></div>".format(htmlEncode(w), meta.annotation);
-                help_groups[meta.feature_group].push(item);
-            }
-        });
-        help_groups = help_groups.map(function(g, i) {
-            return "<div><div class=feature_name><span>{0}</span></div>{1}</div>".format(feature_groups[i], g.join(''));
-        }).join("");
-        return $(help_groups);
-    }
-
-    self.highlightElement = function(sn, duration) {
-        var rc = sn.getBoundingClientRect();
-        runtime.frontendCommand({
-            action: 'highlightElement',
-            duration: duration || 200,
-            rect: {
-                top: rc.top,
-                left: rc.left,
-                width: rc.width,
-                height: rc.height
-            }
-        });
-    };
-
     function isElementPartiallyInViewport(el) {
         var rect = el.getBoundingClientRect();
         var windowHeight = (window.innerHeight || document.documentElement.clientHeight);
@@ -378,7 +323,16 @@ var Normal = (function(mode) {
             scrollIndex = (scrollIndex + 1) % scrollNodes.length;
             var sn = scrollNodes[scrollIndex];
             sn.scrollIntoViewIfNeeded();
-            self.highlightElement(sn);
+            var rc = sn.getBoundingClientRect();
+            Front.highlightElement({
+                duration: 200,
+                rect: {
+                    top: rc.top,
+                    left: rc.left,
+                    width: rc.width,
+                    height: rc.height
+                }
+            });
         }
     };
 
@@ -447,125 +401,10 @@ var Normal = (function(mode) {
         RUNTIME('nextFrame');
     };
 
-    self.showUsage = function() {
-        var _usage = $('<div/>');
-        renderMappings().appendTo(_usage);
-        $("<p style='float:right; width:100%; text-align:right'>").html("<a href='https://github.com/brookhong/surfingkeys' target='_blank' style='color:#0095dd'>More help</a>").appendTo(_usage);
-        runtime.frontendCommand({
-            action: 'showUsage',
-            content: _usage.html(),
-        });
-    };
-
-    self.showPopup = function(content) {
-        runtime.frontendCommand({
-            action: 'showPopup',
-            content: content
-        });
-    };
-
-    self.showEditor = function(element, onWrite, type) {
-        var content, initial_line = 0;
-        if (typeof(element) === "string") {
-            content = element;
-            self.elementBehindEditor = document.body;
-        } else if (type === 'select') {
-            var selected = $(element).val();
-            var options = $(element).find('option').map(function(i) {
-                if ($(this).val() === selected) {
-                    initial_line = i;
-                }
-                return "{0} >< {1}".format($(this).text(), $(this).val());
-            }).toArray();
-            content = options.join('\n');
-            self.elementBehindEditor = element;
-        } else {
-            content = $(element).val();
-            self.elementBehindEditor = element;
-        }
-        self.onEditorSaved = onWrite;
-        runtime.frontendCommand({
-            action: 'showEditor',
-            type: type || "textarea",
-            initial_line: initial_line,
-            content: content
-        });
-    };
-
-    self.chooseTab = function() {
-        runtime.frontendCommand({
-            action: 'chooseTab'
-        });
-    };
-
-    self.openOmnibar = function(args) {
-        args.action = 'openOmnibar';
-        runtime.frontendCommand(args);
-    };
-
-    self.openOmniquery = function(args) {
-        self.onOmniQuery = function(query) {
-            httpRequest({
-                'url': args.url + query
-            }, function(res) {
-                var words = args.parseResult(res);
-
-                runtime.frontendCommand({
-                    action: 'updateOmnibarResult',
-                    words: words
-                });
-            });
-        };
-        self.openOmnibar(({type: "OmniQuery", extra: args.query}))
-    };
-
-    self.openFinder = function() {
-        runtime.frontendCommand({
-            action: "openFinder"
-        });
-    };
-
-    self.showBanner = function(msg, linger_time) {
-        runtime.frontendCommand({
-            action: "showBanner",
-            content: msg,
-            linger_time: linger_time
-        });
-    };
-
-    self.showBubble = function(pos, msg) {
-        runtime.frontendCommand({
-            action: "showBubble",
-            content: msg,
-            position: pos
-        });
-    };
-
-    self.hideBubble = function() {
-        runtime.frontendCommand({
-            action: 'hideBubble'
-        });
-    };
-
-    self.getContentFromClipboard = function(onReady) {
-        runtime.frontendCommand({
-            action: 'getContentFromClipboard'
-        }, onReady);
-    };
-
-    self.writeClipboard = function(text) {
-        runtime.frontendCommand({
-            action: 'writeClipboard',
-            content: text
-        });
-    };
-
     self.finish = function() {
         this.map_node = this.mappings;
         this.pendingMap = null;
-        runtime.frontendCommand({
-            action: 'hideKeystroke'
-        });
+        Front.hideKeystroke();
         if (this.repeats) {
             this.repeats = "";
         }
@@ -590,10 +429,7 @@ var Normal = (function(mode) {
             this.map_node === this.mappings && (key >= "1" || (this.repeats !== "" && key >= "0")) && key <= "9") {
             // reset only after target action executed or cancelled
             this.repeats += key;
-            runtime.frontendCommand({
-                action: 'showKeystroke',
-                key: key
-            });
+            Front.showKeystroke(key);
             ret = "stopEventPropagation";
         } else {
             this.map_node = this.map_node.find(key);
@@ -604,10 +440,7 @@ var Normal = (function(mode) {
                     var code = this.map_node.meta[0].code;
                     if (this.map_node.meta[0].extra_chars) {
                         this.pendingMap = code;
-                        runtime.frontendCommand({
-                            action: 'showKeystroke',
-                            key: key
-                        });
+                        Front.showKeystroke(key);
                     } else {
                         this.setLastKeys && this.setLastKeys(this.map_node.meta[0].word);
                         RUNTIME.repeats = parseInt(this.repeats) || 1;
@@ -620,10 +453,7 @@ var Normal = (function(mode) {
                         }, 0);
                     }
                 } else {
-                    runtime.frontendCommand({
-                        action: 'showKeystroke',
-                        key: key
-                    });
+                    Front.showKeystroke(key);
                 }
                 ret = "stopEventPropagation";
             }
@@ -666,7 +496,7 @@ var Normal = (function(mode) {
         // lastKeys in format: <keys in normal mode>[,(<mode name>\t<keys in this mode>)*], examples
         // ['se']
         // ['f', 'Hints\tBA']
-        lastKeys = settings.lastKeys;
+        lastKeys = runtime.conf.lastKeys;
         self.feedkeys(lastKeys[0]);
         var modeKeys = lastKeys.slice(1);
         for (var i = 0; i < modeKeys.length; i++) {
@@ -690,17 +520,14 @@ var Normal = (function(mode) {
         } else {
             // global mark
             url = url || window.location.href;
-            runtime.settings.marks[mark] = {
+            var mo = {};
+            mo[mark] = {
                 url: url,
                 scrollLeft: document.body.scrollLeft,
                 scrollTop: document.body.scrollTop
             };
-            RUNTIME('updateSettings', {
-                settings: {
-                    marks: runtime.settings.marks
-                }
-            });
-            self.showBanner("Mark '{0}' added for: {1}.".format(htmlEncode(mark), url));
+            RUNTIME('addVIMark', {mark: mo});
+            Front.showBanner("Mark '{0}' added for: {1}.".format(htmlEncode(mark), url));
         }
     };
 
@@ -709,28 +536,36 @@ var Normal = (function(mode) {
             var markInfo = localMarks[mark];
             document.body.scrollLeft = markInfo.scrollLeft;
             document.body.scrollTop = markInfo.scrollTop;
-        } else if (runtime.settings.marks.hasOwnProperty(mark)) {
-            var markInfo = runtime.settings.marks[mark];
-            if (typeof(markInfo) === "string") {
-                markInfo = {
-                    url: markInfo,
-                    scrollLeft: 0,
-                    scrollTop: 0
-                }
-            }
-            markInfo.tab = {
-                tabbed: false,
-                active: true
-            };
-            RUNTIME("openLink", markInfo);
         } else {
-            self.showBanner("No mark '{0}' defined.".format(htmlEncode(mark)));
+            runtime.command({
+                action: 'getSettings',
+                key: 'marks'
+            }, function(response) {
+                var marks = response.settings.marks;
+                if (marks.hasOwnProperty(mark)) {
+                    var markInfo = marks[mark];
+                    if (typeof(markInfo) === "string") {
+                        markInfo = {
+                            url: markInfo,
+                            scrollLeft: 0,
+                            scrollTop: 0
+                        }
+                    }
+                    markInfo.tab = {
+                        tabbed: false,
+                        active: true
+                    };
+                    RUNTIME("openLink", markInfo);
+                } else {
+                    Front.showBanner("No mark '{0}' defined.".format(htmlEncode(mark)));
+                }
+            });
         }
     };
 
     self.resetSettings = function() {
         RUNTIME("resetSettings");
-        self.showBanner("Settings reset.");
+        Front.showBanner("Settings reset.");
     };
 
     self.insertJS = function(code, onload) {

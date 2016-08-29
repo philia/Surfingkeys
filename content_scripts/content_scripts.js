@@ -2,17 +2,21 @@ if (typeof(Commands) === 'undefined') {
     Commands = { items: {} };
 }
 
-var command = function(cmd, annotation, jscode) {
+function command(cmd, annotation, jscode) {
     if (typeof(jscode) === 'string') {
         jscode = new Function(jscode);
     }
-    var ag = _parseAnnotation({annotation: annotation, feature_group: 14});
-    Commands.items[cmd] = {
-        code: jscode,
-        feature_group: ag.feature_group,
-        annotation: annotation
+    var cmd_code = {
+        code: jscode
     };
-};
+    if (Front.isProvider()) {
+        // annotations for commands ared used in frontend.html
+        var ag = _parseAnnotation({annotation: annotation, feature_group: 14});
+        cmd_code.feature_group = ag.feature_group;
+        cmd_code.annotation = ag.annotation;
+    }
+    Commands.items[cmd] = cmd_code;
+}
 
 function parseCommand(cmdline) {
     var cmdline = cmdline.trim();
@@ -35,12 +39,8 @@ function parseCommand(cmdline) {
     return tokens;
 }
 
-if (typeof(addSearchAlias) === 'undefined') {
-    addSearchAlias = function() {};
-}
-
-var actionsRepeatBackground = ['closeTab', 'nextTab', 'previousTab', 'moveTab', 'reloadTab'];
 RUNTIME = function(action, args) {
+    var actionsRepeatBackground = ['closeTab', 'nextTab', 'previousTab', 'moveTab', 'reloadTab'];
     (args = args || {}).action = action;
     if (actionsRepeatBackground.indexOf(action) !== -1) {
         // if the action can only be repeated in background, pass repeats to background with args,
@@ -85,6 +85,24 @@ function _parseAnnotation(ag) {
     return ag;
 }
 
+function createKeyTarget(code, ag, extra_chars, repeatIgnore) {
+    var keybound = {
+        code: code
+    };
+    if (extra_chars) {
+        keybound.extra_chars = extra_chars;
+    }
+    if (repeatIgnore) {
+        keybound.repeatIgnore = repeatIgnore;
+    }
+    if (ag) {
+        ag = _parseAnnotation(ag);
+        keybound.feature_group = ag.feature_group;
+        keybound.annotation = ag.annotation;
+    }
+    return keybound;
+}
+
 function _mapkey(mode, keys, annotation, jscode, options) {
     options = options || {};
     if (!options.domain || options.domain.test(window.location.origin)) {
@@ -92,17 +110,10 @@ function _mapkey(mode, keys, annotation, jscode, options) {
         if (typeof(jscode) === 'string') {
             jscode = new Function(jscode);
         }
-        var ag = _parseAnnotation({annotation: annotation, feature_group: 14});
-        if (mode === Visual) {
-            ag.feature_group = 9;
-        }
-        mode.mappings.add(keys, {
-            code: jscode,
-            annotation: ag.annotation,
-            feature_group: ag.feature_group,
-            repeatIgnore: options.repeatIgnore,
-            extra_chars: options.extra_chars
-        });
+        // to save memory, we keep annotations only in frontend.html, where they are used to create usage message.
+        var ag = (!Front.isProvider()) ? null : {annotation: annotation, feature_group: ((mode === Visual) ? 9 :14)};
+        var keybound = createKeyTarget(jscode, ag, options.extra_chars, options.repeatIgnore);
+        mode.mappings.add(keys, keybound);
     }
 }
 
@@ -126,28 +137,20 @@ function map(new_keystroke, old_keystroke, domain, new_annotation) {
             var cmd = args.shift();
             if (Commands.items.hasOwnProperty(cmd)) {
                 var meta = Commands.items[cmd];
-                var ag = _parseAnnotation({annotation: new_annotation || meta.annotation, feature_group: meta.feature_group});
-                Normal.mappings.add(new_keystroke, {
-                    code: function() {
-                        meta.code.apply(meta.code, args);
-                    },
-                    annotation: ag.annotation,
-                    feature_group: ag.feature_group,
-                    extra_chars: 0
-                });
+                var ag = (!Front.isProvider()) ? null : {annotation: new_annotation || meta.annotation, feature_group: meta.feature_group};
+                var keybound = createKeyTarget(function() {
+                    meta.code.call(meta.code, args);
+                }, ag, meta.extra_chars, meta.repeatIgnore);
+                Normal.mappings.add(new_keystroke, keybound);
             }
         } else {
             var old_map = Normal.mappings.find(old_keystroke);
             if (old_map) {
                 var meta = old_map.meta[0];
-                var ag = _parseAnnotation({annotation: new_annotation || meta.annotation, feature_group: meta.feature_group});
+                var ag = (!Front.isProvider()) ? null : {annotation: new_annotation || meta.annotation, feature_group: meta.feature_group};
+                var keybound = createKeyTarget(meta.code, ag, meta.extra_chars, meta.repeatIgnore);
                 Normal.mappings.remove(new_keystroke);
-                Normal.mappings.add(new_keystroke, {
-                    code: meta.code,
-                    annotation: ag.annotation,
-                    feature_group: ag.feature_group,
-                    extra_chars: meta.extra_chars
-                });
+                Normal.mappings.add(new_keystroke, keybound);
             } else if (old_keystroke in Mode.specialKeys) {
                 Mode.specialKeys[old_keystroke] = new_keystroke;
             }
@@ -161,8 +164,16 @@ function unmap(keystroke, domain) {
     }
 }
 
+function iunmap(keystroke, domain) {
+    if (!domain || domain.test(window.location.origin)) {
+        Insert.mappings.remove(keystroke);
+    }
+}
+
 function addSearchAliasX(alias, prompt, search_url, search_leader_key, suggestion_url, callback_to_parse_suggestion, only_this_site_key) {
-    addSearchAlias(alias, prompt, search_url, suggestion_url, callback_to_parse_suggestion);
+    if (typeof(addSearchAlias) !== 'undefined') {
+        addSearchAlias(alias, prompt, search_url, suggestion_url, callback_to_parse_suggestion);
+    }
     mapkey((search_leader_key || 's') + alias, '#6Search selected with ' + prompt, 'searchSelectedWith("{0}")'.format(search_url));
     vmapkey((search_leader_key || 's') + alias, '#6Search selected with ' + prompt, 'searchSelectedWith("{0}")'.format(search_url));
     mapkey((search_leader_key || 's') + (only_this_site_key || 'o') + alias, '#6Search selected only in this site with ' + prompt, 'searchSelectedWith("{0}", true)'.format(search_url));
@@ -202,8 +213,6 @@ function tabOpenLink(str) {
                 } else {
                     url = "http://" + url;
                 }
-            } else {
-                url = 'https://www.google.com/search?q=' + url;
             }
             RUNTIME("openLink", {
                 tab: {
@@ -216,13 +225,13 @@ function tabOpenLink(str) {
 }
 
 function searchSelectedWith(se, onlyThisSite, interactive, alias) {
-    Normal.getContentFromClipboard(function(response) {
+    Front.getContentFromClipboard(function(response) {
         var query = window.getSelection().toString() || response.data;
         if (onlyThisSite) {
             query += " site:" + window.location.hostname;
         }
         if (interactive) {
-            Normal.openOmnibar({type: "SearchEngine", extra: alias, pref: query});
+            Front.openOmnibar({type: "SearchEngine", extra: alias, pref: query});
         } else {
             tabOpenLink(se + encodeURI(query));
         }
@@ -288,47 +297,89 @@ function httpRequest(args, onSuccess) {
     runtime.command(args, onSuccess);
 }
 
-var settings;
-function applySettings() {
+/*
+ * run user snippets, and return settings updated in snippets
+ */
+function runUserScript(snippets) {
+    var result = { settings: {}, error: "" };
     try {
-        var theInstructions = runtime.settings.snippets;
-        settings = runtime.settings;
-        var F = new Function(theInstructions);
-        F();
-        RUNTIME('updateSettings', {
-            noack: true,
-            settings: settings
-        });
+        var F = new Function('settings', snippets);
+        F(result.settings);
     } catch (e) {
-        if (window === top) {
-            console.log("reset Settings because of: " + e);
-            runtime.command({
-                action: "resetSettings",
-                useDefault: true
-            });
-        }
+        result.error = e.toString();
     }
-    $(document).trigger("surfingkeys:settingsApplied");
+    return result;
 }
 
-runtime.actions['settingsUpdated'] = function(response) {
-    runtime.settings = response.settings;
-    applySettings();
-};
-
-runtime.runtime_handlers['focusFrame'] = function(msg, sender, response) {
-    if (msg.frameId === window.frameId) {
-        window.focus();
-        document.body.scrollIntoViewIfNeeded();
-        Normal.highlightElement(window.frameElement || document.body, 500);
-        Events.resetMode();
+function applySettings(rs) {
+    for (var k in rs) {
+        if (runtime.conf.hasOwnProperty(k)) {
+            runtime.conf[k] = rs[k];
+        }
     }
-};
+    if ('findHistory' in rs) {
+        runtime.conf.lastQuery = rs.findHistory.length ? rs.findHistory[0] : "";
+    }
+    if (('snippets' in rs) && rs.snippets) {
+        var delta = runUserScript(rs.snippets);
+        if (!jQuery.isEmptyObject(delta.settings)) {
+            // overrides local settings from snippets
+            if ('theme' in delta.settings) {
+                $(document).trigger("surfingkeys:themeChanged", [delta.settings.theme]);
+                delete delta.settings.theme;
+            }
+            $.extend(runtime.conf, delta.settings);
+        } else if (delta.error !== "" && window === top) {
+            Front.showPopup("Error found in settings: " + delta.error);
+        }
+    }
+}
 
-$(document).on('surfingkeys:settingsApplied', function(e) {
-    Events.resetMode();
+runtime.on('settingsUpdated', function(response) {
+    var rs = response.settings;
+    applySettings(rs);
+    if ('blacklist' in rs) {
+        if (checkBlackList(rs)) {
+            Disabled.enter();
+        } else {
+            Disabled.exit();
+        }
+    }
 });
 
-$.when(settingsDeferred).done(function (settings) {
-    applySettings();
+function checkBlackList(sb) {
+    return sb.blacklist[window.location.origin] || sb.blacklist['.*']
+        || (sb.blacklistPattern && typeof(sb.blacklistPattern.test) === "function" && sb.blacklistPattern.test(window.location.href));
+}
+
+runtime.command({
+    action: 'getSettings'
+}, function(response) {
+    var rs = response.settings;
+
+    applySettings(rs);
+
+    Normal.enter();
+
+    if (checkBlackList(rs)) {
+        Disabled.enter();
+    } else {
+        document.addEventListener('DOMContentLoaded', function(e) {
+            GetBackFocus.enter();
+        });
+    }
+});
+
+Normal.insertJS(function() {
+    var _wr = function(type) {
+        var orig = history[type];
+        return function() {
+            var rv = orig.apply(this, arguments);
+            var e = new Event(type);
+            e.arguments = arguments;
+            window.dispatchEvent(e);
+            return rv;
+        };
+    };
+    history.pushState = _wr('pushState'), history.replaceState = _wr('replaceState');
 });

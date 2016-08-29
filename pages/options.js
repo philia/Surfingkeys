@@ -7,7 +7,8 @@ defaultMappingsEditor.setReadOnly(true);
 defaultMappingsEditor.container.style.background="#f1f1f1";
 defaultMappingsEditor.$blockScrolling = Infinity;
 
-var mappingsEditor = (function(mode, elmId) {
+var mappingsEditor = null;
+function createMappingEditor(mode, elmId) {
     var self = ace.edit(elmId);
     self = $.extend(self, mode);
     self = $.extend(self, {name: "mappingsEditor", eventListeners: {}, mode: 'normal'});
@@ -52,36 +53,50 @@ var mappingsEditor = (function(mode, elmId) {
         cm.constructor.Vim.defineEx("write", "w", function(cm, input) {
             saveSettings();
         });
+        cm.constructor.Vim.defineEx("quit", "q", function(cm, input) {
+            window.close();
+        });
     });
     self.getSession().setMode("ace/mode/javascript");
     self.$blockScrolling = Infinity;
 
     self.setExampleValue = function() {
-        self.setValue("// an example to create a new mapping `ctrl-y`\nmapkey('<Ctrl-y>', 'Show me the money', function() {\n    Normal.showPopup('a well-known phrase uttered by characters in the 1996 film Jerry Maguire (Escape to close).');\n});\n\n// an example to replace `u` with `?`, click `Default mappings` to see how `u` works.\nmap('?', 'u');\n\n// an example to remove mapkey `Ctrl-i`\nunmap('<Ctrl-i>');\n\n// click `Save` button to make above settings to take effect.\n// set theme\nsettings.theme = '\\\n.sk_theme { \\\n    background: #fff; \\\n    color: #000; \\\n} \\\n.sk_theme tbody { \\\n    color: #000; \\\n} \\\n.sk_theme input { \\\n    color: #000; \\\n} \\\n.sk_theme .url { \\\n    color: #555; \\\n} \\\n.sk_theme .annotation { \\\n    color: #555; \\\n} \\\n.sk_theme .focused { \\\n    background: #f0f0f0; \\\n}';\n", -1);
+        self.setValue("// an example to create a new mapping `ctrl-y`\nmapkey('<Ctrl-y>', 'Show me the money', function() {\n    Front.showPopup('a well-known phrase uttered by characters in the 1996 film Jerry Maguire (Escape to close).');\n});\n\n// an example to replace `u` with `?`, click `Default mappings` to see how `u` works.\nmap('?', 'u');\n\n// an example to remove mapkey `Ctrl-i`\nunmap('<Ctrl-i>');\n\n// click `Save` button to make above settings to take effect.\n// set theme\nsettings.theme = '\\\n.sk_theme { \\\n    background: #fff; \\\n    color: #000; \\\n} \\\n.sk_theme tbody { \\\n    color: #000; \\\n} \\\n.sk_theme input { \\\n    color: #000; \\\n} \\\n.sk_theme .url { \\\n    color: #555; \\\n} \\\n.sk_theme .annotation { \\\n    color: #555; \\\n} \\\n.sk_theme .focused { \\\n    background: #f0f0f0; \\\n}';\n", -1);
     };
 
     return self;
-})(Mode, 'mappings');
+}
 
-function renderSettings() {
-    if (runtime.settings.snippets.length) {
-        mappingsEditor.setValue(runtime.settings.snippets, -1);
-    } else {
-        mappingsEditor.setExampleValue();
-    }
-    $('#storage').val(runtime.settings.storage);
-    $('#localPath').val(runtime.settings.localPath);
+var localPathSaved = "";
+function renderSettings(rs) {
+    $('#storage').val(rs.storage);
+    $('#localPath').val(rs.localPath);
+    localPathSaved = rs.localPath;
     var h = $(window).height() - $('#save_container').outerHeight() * 4;
     $(mappingsEditor.container).css('height', h);
     $(defaultMappingsEditor.container).css('height', h);
+    if (rs.snippets.length) {
+        mappingsEditor.setValue(rs.snippets, -1);
+    } else {
+        mappingsEditor.setExampleValue();
+    }
 }
-$.when(settingsDeferred).done(function (settings) {
-    renderSettings();
-    var old_handler = runtime.actions['settingsUpdated'];
-    runtime.actions['settingsUpdated'] = function(resp) {
-        old_handler(resp);
-        renderSettings();
-    };
+
+runtime.on('settingsUpdated', function(resp) {
+    if ('snippets' in resp.settings) {
+        if (resp.settings.snippets.length) {
+            mappingsEditor.setValue(resp.settings.snippets, -1);
+        } else {
+            mappingsEditor.setExampleValue();
+        }
+    }
+});
+
+runtime.command({
+    action: 'getSettings'
+}, function(response) {
+    mappingsEditor = createMappingEditor(Mode, 'mappings');
+    renderSettings(response.settings);
 });
 
 $('#storage').change(function() {
@@ -96,9 +111,8 @@ $('#reset_button').click(function() {
         action: "resetSettings",
         useDefault: true
     }, function(response) {
-        runtime.settings = response.settings;
-        renderSettings();
-        Normal.showBanner('Settings reset', 300);
+        renderSettings(response.settings);
+        Front.showBanner('Settings reset', 300);
     });
 });
 
@@ -111,12 +125,11 @@ $('#showDefaultSettings').click(function() {
         $(defaultMappingsEditor.container).hide();
         $(mappingsEditor.container).css('width', '100%');
     } else {
-        $.ajax({
+        httpRequest({
             url: chrome.extension.getURL('/pages/default.js'),
-            type: 'GET'
-        }).done(function(response) {
+        }, function(res) {
             $(defaultMappingsEditor.container).css('display', 'inline-block');
-            defaultMappingsEditor.setValue(response, -1);
+            defaultMappingsEditor.setValue(res.text, -1);
             $(defaultMappingsEditor.container).css('width', '50%');
         });
         $(mappingsEditor.container).css('width', '50%');
@@ -136,24 +149,25 @@ function getURIPath(fn) {
 function saveSettings() {
     var settingsCode = mappingsEditor.getValue();
     var localPath = getURIPath($('#localPath').val().trim());
-    if (localPath.length && localPath !== runtime.settings.localPath) {
+    if (localPath.length && localPath !== localPathSaved) {
         RUNTIME("loadSettingsFromUrl", {
             url: localPath
         });
-        Normal.showBanner('Loading settings from ' + localPath, 300);
+        Front.showBanner('Loading settings from ' + localPath, 300);
     } else {
-        try {
-            var F = new Function(settingsCode);
-            F();
+        var delta = runUserScript(settingsCode);
+        if (delta.error === "") {
+
             RUNTIME('updateSettings', {
                 settings: {
                     snippets: settingsCode,
                     localPath: getURIPath($('#localPath').val())
                 }
             });
-            Normal.showBanner('Settings saved', 300);
-        } catch (e) {
-            Normal.showBanner(e.toString(), 3000);
+
+            Front.showBanner('Settings saved', 300);
+        } else {
+            Front.showBanner(delta.error, 9000);
         }
     }
 }

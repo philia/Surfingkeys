@@ -1,5 +1,16 @@
-var frontendUI = (function(mode) {
-    var self = $.extend({name: "frontendUI", eventListeners: {}, ports: {}}, mode);
+var Front = (function(mode) {
+    var self = $.extend({name: "Front", eventListeners: {}, ports: {}}, mode);
+
+    // this object is implementation of UI, it's UI provider
+    self.isProvider = function() {
+        return true;
+    };
+
+    self.contentCommand = function(args, cb) {
+        args.toContent = true;
+        runtime.command(args, cb);
+    };
+
     self.addEventListener('keydown', function(event) {
         var handled = "";
         if (event.sk_keyName === Mode.specialKeys["<Esc>"]) {
@@ -25,15 +36,22 @@ var frontendUI = (function(mode) {
     });
 
     self.postMessage = function(to, message) {
-        message.id = generateQuickGuid();
         self.ports[to].postMessage(message);
     };
     self.pointerEvents = "none";
     self.flush = function() {
         self.postMessage('top', {
+            action: 'setFrontFrame',
             pointerEvents: self.pointerEvents,
             frameHeight: getFrameHeight()
         });
+    };
+    self.visualCommand = function(args) {
+        if (self.pointerEvents === "none") {
+            Front.contentCommand(args);
+        } else {
+            Visual[args.action](args.query);
+        }
     };
 
     self.omnibar = $('#sk_omnibar').hide();
@@ -78,10 +96,13 @@ var frontendUI = (function(mode) {
         self.flush();
         self.pointerEvents = "all";
         _display.onShow && _display.onShow(args);
-        window.focus();
+        if (_editor !== td) {
+            // don't set focus for editor, as it may lead frontend.html hold focus.
+            window.focus();
+        }
     }
 
-    runtime.actions['highlightElement'] = function(message) {
+    self.highlightElement = function(message) {
         var rect = message.rect;
         frameElement.css('top', rect.top).css('left', rect.left).css('width', rect.width).css('height', rect.height).show();
         self.flush();
@@ -90,6 +111,7 @@ var frontendUI = (function(mode) {
             self.flush();
         }, message.duration);
     };
+    runtime.on('highlightElement', self.highlightElement);
 
     _tabs.onShow = function(tabs) {
         var tabs_fg = _tabs.find('div.sk_tabs_fg');
@@ -110,29 +132,82 @@ var frontendUI = (function(mode) {
         });
         _tabs.find('div.sk_tabs_bg').css('width', window.innerWidth).css('height', window.innerHeight);
     }
-    runtime.actions['chooseTab'] = function(message) {
+    self.chooseTab = function() {
         runtime.command({
             action: 'getTabs'
         }, function(response) {
-            if (response.tabs.length > runtime.settings.tabsThreshold) {
+            if (response.tabs.length > runtime.conf.tabsThreshold) {
                 showPopup(self.omnibar, {type: 'Tabs'});
             } else {
                 showPopup(_tabs, response.tabs);
             }
         });
     };
+    runtime.on('chooseTab', self.chooseTab);
+
+    var callbacks = {};
+    self.topCommand = function(args, cb) {
+        args.id = generateQuickGuid();
+        if (cb) {
+            callbacks[args.id] = cb;
+        }
+        self.postMessage('top', args);
+    };
+
     _usage.onShow = function(message) {
-        _usage.html(message.content);
+        var feature_groups = [
+            'Help',                  // 0
+            'Mouse Click',           // 1
+            'Scroll Page / Element', // 2
+            'Tabs',                  // 3
+            'Page Navigation',       // 4
+            'Sessions',              // 5
+            'Search selected with',  // 6
+            'Clipboard',             // 7
+            'Omnibar',               // 8
+            'Visual Mode',           // 9
+            'vim-like marks',        // 10
+            'Settings',              // 11
+            'Chrome URLs',           // 12
+            'Proxy',                 // 13
+            'Misc',                  // 14
+            'Insert Mode',           // 15
+        ];
+        var holder = $('<div/>');
+        var help_groups = feature_groups.map(function(){return [];});
+        [ Normal.mappings, Visual.mappings, Insert.mappings ].map(function(mappings) {
+            var words = mappings.getWords();
+            for (var i = 0; i < words.length; i++) {
+                var w = words[i];
+                var meta = mappings.find(w).meta[0];
+                var item = "<div><span class=kbd-span><kbd>{0}</kbd></span><span class=annotation>{1}</span></div>".format(htmlEncode(w), meta.annotation);
+                help_groups[meta.feature_group].push(item);
+            }
+        });
+        help_groups = help_groups.map(function(g, i) {
+            return "<div><div class=feature_name><span>{0}</span></div>{1}</div>".format(feature_groups[i], g.join(''));
+        }).join("");
+        $(help_groups).appendTo(holder);
+        $("<p style='float:right; width:100%; text-align:right'>").html("<a href='https://github.com/brookhong/surfingkeys' target='_blank' style='color:#0095dd'>More help</a>").appendTo(holder);
+        _usage.html(holder.html());
     };
-    runtime.actions['showUsage'] = function(message) {
+
+    runtime.on('showUsage', function(message) {
         showPopup(_usage, message);
+    });
+
+    self.showUsage = function() {
+        // showUsage in frontend.html once more will hide it.
+        self.hidePopup();
     };
-    _popup.onShow = function(message) {
-        _popup.html(message.content);
+
+    self.showPopup = function(message) {
+        _popup.html(message);
+        showPopup(_popup);
     };
-    runtime.actions['showPopup'] = function(message) {
-        showPopup(_popup, message);
-    };
+    runtime.on('showPopup', function(message) {
+        self.showPopup(message.content);
+    });
     _editor.onShow = function(message) {
         if (typeof(AceEditor) !== "undefined") {
             AceEditor.show(message);
@@ -148,19 +223,25 @@ var frontendUI = (function(mode) {
             });
         }
     };
-    runtime.actions['showEditor'] = function(message) {
+    self.showEditor = function() {
+        _popup.html("Not supported.");
+        showPopup(_popup);
+    };
+    runtime.on('showEditor', function(message) {
         showPopup(_editor, message);
-    };
-    runtime.actions['updateOmnibarResult'] = function(message) {
+    });
+    runtime.on('updateOmnibarResult', function(message) {
         Omnibar.listWords(message.words);
-    };
-    runtime.actions['openOmnibar'] = function(message) {
+    });
+    self.openOmnibar = function(message) {
         showPopup(self.omnibar, message);
     };
-    runtime.actions['openFinder'] = function(message) {
+    runtime.on('openOmnibar', self.openOmnibar);
+    self.openFinder = function() {
         Find.open();
     };
-    runtime.actions['showBanner'] = function(message) {
+    runtime.on('openFinder', self.openFinder);
+    self.showBanner = function(message) {
         banner.html(message.content).show();
         self.flush();
         banner.finish();
@@ -174,7 +255,8 @@ var frontendUI = (function(mode) {
             self.flush();
         });
     };
-    runtime.actions['showBubble'] = function(message) {
+    runtime.on('showBanner', self.showBanner);
+    runtime.on('showBubble', function(message) {
         var pos = message.position;
         _bubble.find('div.sk_bubble_content').html(message.content);
         _bubble.show();
@@ -191,18 +273,26 @@ var frontendUI = (function(mode) {
         }
         _bubble.find('div.sk_arrow').css('left', left[1]);
         _bubble.css('top', pos.top - h - 12).css('left', left[0]);
-    };
-    runtime.actions['hideBubble'] = function(message) {
+    });
+    self.hideBubble = function() {
         _bubble.hide();
+    };
+    runtime.on('hideBubble', function(message) {
+        self.hideBubble();
         self.flush();
+    });
+
+    self.showStatus = function(pos, content, duration) {
+        StatusBar.show(pos, content, duration);
     };
-    runtime.actions['showStatus'] = function(message) {
-        StatusBar.show(message.position, message.content, message.duration);
-    };
+
+    runtime.on('showStatus', function(message) {
+        self.showStatus(message.position, message.content, message.duration);
+    });
 
     var clipboard_holder = $('<textarea id=sk_clipboard/>');
     clipboard_holder = clipboard_holder[0];
-    runtime.actions['getContentFromClipboard'] = function(message) {
+    self.getContentFromClipboard = function(cb) {
         var result = '';
         document.body.appendChild(clipboard_holder);
         clipboard_holder.value = '';
@@ -212,17 +302,28 @@ var frontendUI = (function(mode) {
         }
         clipboard_holder.value = '';
         clipboard_holder.remove();
+        if (cb) {
+            // to make getContentFromClipboard have a same syntax with Front in content window
+            // pass result as data attribute of an object.
+            cb({data: result});
+        }
         return result;
     };
-    runtime.actions['writeClipboard'] = function(message) {
+    runtime.on('getContentFromClipboard', function(message) {
+        return self.getContentFromClipboard();
+    });
+    self.writeClipboard = function(message) {
         document.body.appendChild(clipboard_holder);
-        clipboard_holder.value = message.content;
+        clipboard_holder.value = message;
         clipboard_holder.select();
         document.execCommand('copy');
         clipboard_holder.value = '';
         clipboard_holder.remove();
     };
-    runtime.actions['hideKeystroke'] = function(message) {
+    runtime.on('writeClipboard', function(message) {
+        self.writeClipboard(message.content);
+    });
+    self.hideKeystroke = function() {
         keystroke.animate({
             right: "-2rem"
         }, 300, function() {
@@ -231,13 +332,14 @@ var frontendUI = (function(mode) {
             self.flush();
         });
     };
-    runtime.actions['showKeystroke'] = function(message) {
+    runtime.on('hideKeystroke', self.hideKeystroke);
+    self.showKeystroke = function(key) {
         if (keystroke.is(':animated')) {
             keystroke.finish()
         }
         keystroke.show();
         self.flush();
-        var keys = keystroke.html() + message.key;
+        var keys = keystroke.html() + key;
         keystroke.html(keys);
         if (keystroke.css('right') !== '0px') {
             keystroke.animate({
@@ -245,9 +347,9 @@ var frontendUI = (function(mode) {
             }, 300);
         }
     };
-    runtime.actions['style'] = function(message) {
-        $('#sk_theme').html(message.css);
-    };
+    runtime.on('showKeystroke', function(message) {
+        self.showKeystroke(message.key);
+    });
 
     self.initPort = function(message) {
         self.ports[message.from] = event.ports[0];
@@ -255,7 +357,11 @@ var frontendUI = (function(mode) {
 
     self.handleMessage = function(event) {
         var _message = event.data;
-        if (_message.action && self.hasOwnProperty(_message.action)) {
+        if (callbacks[_message.id]) {
+            var f = callbacks[_message.id];
+            delete callbacks[_message.id];
+            f(_message);
+        } else if (_message.action && self.hasOwnProperty(_message.action)) {
             var ret = self[_message.action](_message) || {};
             ret.id = _message.id;
             if (_message.from && self.ports[_message.from]) {
@@ -266,3 +372,32 @@ var frontendUI = (function(mode) {
 
     return self;
 })(Mode);
+
+var addSearchAlias = function(alias, prompt, url, suggestionURL, listSuggestion) {
+    SearchEngine.aliases[alias] = {
+        prompt: prompt + "≫",
+        url: url,
+        suggestionURL: suggestionURL,
+        listSuggestion: listSuggestion
+    };
+}
+
+window.addEventListener('message', function(event) {
+    Front.handleMessage(event);
+}, true);
+
+runtime.command({
+    action: 'getSettings'
+}, function(response) {
+    var rs = response.settings;
+    runtime.conf.useLocalMarkdownAPI = rs.useLocalMarkdownAPI;
+    runtime.conf.tabsThreshold = rs.tabsThreshold;
+    runtime.conf.omnibarMaxResults = rs.omnibarMaxResults;
+    applySettings(rs);
+
+    Normal.enter();
+});
+
+$(document).on('surfingkeys:themeChanged', function(evt, theme) {
+    $('#sk_theme').html(theme);
+});

@@ -94,14 +94,14 @@ var Omnibar = (function(ui) {
             handler.onKeydown.call(event.target, event) && event.preventDefault();
         }
         if (event.sk_keyName === Mode.specialKeys["<Esc>"]) {
-            frontendUI.hidePopup();
+            Front.hidePopup();
             event.preventDefault();
         } else if (event.sk_keyName === Mode.specialKeys["<Ctrl-d>"]) {
             deleteFocused();
             event.preventDefault();
         } else if (event.keyCode === KeyboardUtils.keyCodes.enter) {
             handler.activeTab = !event.ctrlKey;
-            handler.onEnter() && frontendUI.hidePopup();
+            handler.onEnter() && Front.hidePopup();
         } else if (event.keyCode === KeyboardUtils.keyCodes.space) {
             expandAlias(self.input.val()) && event.preventDefault();
         } else if (event.keyCode === KeyboardUtils.keyCodes.backspace) {
@@ -141,14 +141,14 @@ var Omnibar = (function(ui) {
      *
      */
     self.listURLs = function(items, showFolder) {
-        var sliced = items.slice(0, (runtime.settings.omnibarMaxResults || 20));
+        var sliced = items.slice(0, (runtime.conf.omnibarMaxResults || 20));
         var query = Omnibar.input.val().trim();
         var rxp = query.length ? (new RegExp(query.replace(/\s+/, "\|"), 'gi')) : null;
         self.listResults(sliced, function(b) {
             var li = $('<li/>');
             if (b.hasOwnProperty('url')) {
                 b.title = (b.title && b.title !== "") ? b.title : b.url;
-                var type = b.type, additional = "", uid = "";
+                var type = b.type, additional = "", uid = b.uid;
                 if (!type) {
                     if (b.hasOwnProperty('lastVisitTime')) {
                         type = "☼";
@@ -207,8 +207,7 @@ var Omnibar = (function(ui) {
 
     self.openFocused = function() {
         var ret = false, fi = self.resultsDiv.find('li.focused');
-        var url = fi.data('url'), uid = fi.data('uid');
-        var type = uid[0], uid = uid.substr(1);
+        var url = fi.data('url');
         if (url === undefined) {
             url = self.input.val();
             if (url.indexOf(':') === -1) {
@@ -223,6 +222,10 @@ var Omnibar = (function(ui) {
             }, function(ret) {
             });
         } else {
+            var type = "", uid = fi.data('uid');
+            if (uid) {
+                type = uid[0], uid = uid.substr(1);
+            }
             if (type === 'T') {
                 runtime.command({
                     action: 'focusTab',
@@ -287,7 +290,7 @@ var Omnibar = (function(ui) {
     };
 
     return self;
-})(frontendUI.omnibar);
+})(Front.omnibar);
 
 var OpenBookmarks = (function() {
     var self = {
@@ -455,7 +458,7 @@ var AddBookmark = (function() {
             action: 'createBookmark',
             page: self.page
         }, function(response) {
-            Normal.showBanner("Bookmark created at {0}.".format(selectedFolder.title + self.page.path.join('/')));
+            Front.showBanner("Bookmark created at {0}.".format(selectedFolder.title + self.page.path.join('/')));
         });
         return true;
     };
@@ -506,27 +509,32 @@ var OpenURLs = (function() {
         prompt: '≫'
     }, all;
 
-    function _queryURLs(word) {
-        runtime.command({
-            action: self.action,
-            query: word
-        }, function(response) {
-            all = response.urls;
-            Omnibar.listURLs(response.urls, false);
-        });
-        if (self.action === "getTopSites") {
+    function _queryURLs() {
+        if (self.action === "getAllSites") {
             runtime.command({
-                action: 'getTabs',
-                query: ""
+                action: 'getTabs'
             }, function(response) {
-                all = all.concat(response.tabs);
-                Omnibar.listBookmarkFolders(function() {
-                    runtime.command({
-                        action: 'getAllURLs'
-                    }, function(response) {
-                        all = all.concat(response.urls);
+                all = response.tabs;
+                runtime.command({
+                    action: "getTopSites"
+                }, function(response) {
+                    all = all.concat(response.urls);
+                    Omnibar.listURLs(all, false);
+                    Omnibar.listBookmarkFolders(function() {
+                        runtime.command({
+                            action: 'getAllURLs'
+                        }, function(response) {
+                            all = all.concat(response.urls);
+                        });
                     });
                 });
+            });
+        } else {
+            runtime.command({
+                action: self.action
+            }, function(response) {
+                all = response.urls;
+                Omnibar.listURLs(response.urls, false);
             });
         }
     }
@@ -539,7 +547,7 @@ var OpenURLs = (function() {
         } else {
             self.prompt = '≫';
         }
-        _queryURLs("");
+        _queryURLs();
     };
     self.onEnter = Omnibar.openFocused.bind(self);
     self.onInput = function() {
@@ -584,24 +592,30 @@ var OpenVIMarks = (function() {
     self.onOpen = function() {
         var query = Omnibar.input.val();
         var urls = [];
-        for (var m in runtime.settings.marks) {
-            var markInfo = runtime.settings.marks[m];
-            if (typeof(markInfo) === "string") {
-                markInfo = {
-                    url: markInfo,
-                    scrollLeft: 0,
-                    scrollTop: 0
+        runtime.command({
+            action: 'getSettings',
+            key: 'marks'
+        }, function(response) {
+            for (var m in response.settings.marks) {
+                var markInfo = response.settings.marks[m];
+                if (typeof(markInfo) === "string") {
+                    markInfo = {
+                        url: markInfo,
+                        scrollLeft: 0,
+                        scrollTop: 0
+                    }
+                }
+                if (query === "" || markInfo.url.indexOf(query) !== -1) {
+                    urls.push({
+                        title: m,
+                        type: '♡',
+                        uid: 'M' + m,
+                        url: markInfo.url
+                    });
                 }
             }
-            if (query === "" || markInfo.url.indexOf(query) !== -1) {
-                urls.push({
-                    title: m,
-                    type: '♡',
-                    url: markInfo.url
-                });
-            }
-        }
-        Omnibar.listURLs(urls, false);
+            Omnibar.listURLs(urls, false);
+        });
     };
     self.onEnter = Omnibar.openFocused.bind(self);
     self.onInput = self.onOpen;
@@ -660,14 +674,19 @@ var Commands = (function() {
 
     self.onOpen = function() {
         historyInc = -1;
-        var candidates = runtime.settings.cmdHistory;
-        if (candidates.length) {
-            Omnibar.listResults(candidates, function(c) {
-                return $('<li/>').data('cmd', c).html(c);
-            });
-            Omnibar.focusedItem = 0;
-            Omnibar.input.val(candidates[0]);
-        }
+        runtime.command({
+            action: 'getSettings',
+            key: 'cmdHistory'
+        }, function(response) {
+            var candidates = response.settings.cmdHistory;
+            if (candidates.length) {
+                Omnibar.listResults(candidates, function(c) {
+                    return $('<li/>').data('cmd', c).html(c);
+                });
+                Omnibar.focusedItem = 0;
+                Omnibar.input.val(candidates[0]);
+            }
+        });
     };
     self.onInput = function() {
         var cmd = Omnibar.input.val();
@@ -693,7 +712,7 @@ var Commands = (function() {
             var cmd = args.shift();
             if (self.items.hasOwnProperty(cmd)) {
                 var code = self.items[cmd].code;
-                ret = code.apply(code, args);
+                ret = code.call(code, args);
             } else {
                 var out;
                 try {
@@ -725,14 +744,14 @@ var OmniQuery = (function() {
     self.onOpen = function(arg) {
         if (arg) {
             Omnibar.input.val(arg);
-            runtime.contentCommand({
+            Front.contentCommand({
                 action: 'omnibar_query_entered',
                 query: arg
             });
         }
     };
     self.onEnter = function() {
-        runtime.contentCommand({
+        Front.contentCommand({
             action: 'omnibar_query_entered',
             query: Omnibar.input.val()
         });

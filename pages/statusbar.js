@@ -26,7 +26,7 @@ var StatusBar = (function(ui) {
         }
         $(span[lastSpan]).css('border-right', '');
         ui.css('display', lastSpan === -1 ? 'none' : 'block');
-        frontendUI.flush();
+        Front.flush();
         if (duration) {
             timerHide = setTimeout(function() {
                 ui.css('display', 'none');
@@ -34,7 +34,7 @@ var StatusBar = (function(ui) {
         }
     };
     return self;
-})(frontendUI.statusBar);
+})(Front.statusBar);
 
 var Find = (function() {
     var self = {};
@@ -52,14 +52,21 @@ var Find = (function() {
         StatusBar.show(0, "/");
         StatusBar.show(1, input);
         input.on('input', function() {
-            runtime.contentCommand({
+            Front.visualCommand({
                 action: 'visualUpdate',
                 query: input.val()
             });
         });
+        var findHistory = [];
+        runtime.command({
+            action: 'getSettings',
+            key: 'findHistory'
+        }, function(response) {
+            findHistory = response.settings.findHistory;
+        });
         input[0].onkeydown = function(event) {
             if (event.sk_keyName === Mode.specialKeys["<Esc>"]) {
-                runtime.contentCommand({
+                Front.visualCommand({
                     action: 'visualClear'
                 });
                 reset();
@@ -67,17 +74,17 @@ var Find = (function() {
                 var query = input.val();
                 reset();
                 runtime.updateHistory('find', query);
-                runtime.contentCommand({
+                Front.visualCommand({
                     action: 'visualEnter',
                     query: query
                 });
             } else if (event.keyCode === KeyboardUtils.keyCodes.upArrow || event.keyCode === KeyboardUtils.keyCodes.downArrow) {
-                if (runtime.settings.findHistory.length) {
-                    historyInc = (event.keyCode === KeyboardUtils.keyCodes.upArrow) ? (historyInc + 1) : (historyInc + runtime.settings.findHistory.length - 1);
-                    historyInc = historyInc % runtime.settings.findHistory.length;
-                    var query = runtime.settings.findHistory[historyInc];
+                if (findHistory.length) {
+                    historyInc = (event.keyCode === KeyboardUtils.keyCodes.upArrow) ? (historyInc + 1) : (historyInc + findHistory.length - 1);
+                    historyInc = historyInc % findHistory.length;
+                    var query = findHistory[historyInc];
                     input.val(query);
-                    runtime.contentCommand({
+                    Front.visualCommand({
                         action: 'visualUpdate',
                         query: query
                     });
