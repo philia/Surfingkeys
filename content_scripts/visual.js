@@ -1,9 +1,9 @@
 var Visual = (function(mode) {
-    var self = $.extend({name: "Visual", eventListeners: {}}, mode);
+    var self = $.extend({name: "Visual", eventListeners: {}, _style: {}}, mode);
 
     self.addEventListener('keydown', function(event) {
         var updated = "";
-        if (event.sk_keyName === Mode.specialKeys["<Esc>"]) {
+        if (Mode.isSpecialKeyOf("<Esc>", event.sk_keyName)) {
             if (state > 1) {
                 cursor.remove();
                 selection.collapse(selection.anchorNode, selection.anchorOffset);
@@ -47,7 +47,7 @@ var Visual = (function(mode) {
         Front.showStatus(2, status[state]);
     });
 
-    self.mappings = new Trie('', Trie.SORT_NONE);
+    self.mappings = new Trie();
     self.map_node = self.mappings;
     self.repeats = "";
     self.mappings.add("l", {
@@ -272,7 +272,7 @@ var Visual = (function(mode) {
     }
 
     function modifySelection() {
-        var sel = self.map_node.meta[0].annotation.split(" ");
+        var sel = self.map_node.meta.annotation.split(" ");
         var alter = (state === 2) ? "extend" : "move";
         hideCursor();
         var prevPos = [selection.focusNode, selection.focusOffset];
@@ -359,15 +359,20 @@ var Visual = (function(mode) {
     self.star = function() {
         if (selection.focusNode && selection.focusNode.nodeValue) {
             hideCursor();
-            var query = selection.toString();
-            if (query.length === 0) {
-                query = getNearestWord(selection.focusNode.nodeValue, selection.focusOffset);
-            }
+            var query = self.getWordUnderCursor();
             runtime.updateHistory('find', query);
             self.visualClear();
             highlight(new RegExp(query, "g" + (caseSensitive ? "" : "i")));
             showCursor();
         }
+    };
+
+    self.getWordUnderCursor = function() {
+        var word = selection.toString();
+        if (word.length === 0 && selection.focusNode && selection.focusNode.nodeValue) {
+            word = getNearestWord(selection.focusNode.nodeValue, selection.focusOffset);
+        }
+        return word;
     };
 
     self.next = function(backward) {
@@ -389,15 +394,32 @@ var Visual = (function(mode) {
         }, 1);
     };
 
+    function findNextTextNodeBy(query, caseSensitive) {
+        var found = false;
+        var pos = [selection.anchorNode, selection.anchorOffset];
+        while(window.find(query, caseSensitive) && (selection.anchorNode != pos[0] || selection.anchorOffset != pos[1])) {
+            pos = [selection.anchorNode, selection.anchorOffset];
+            if (selection.anchorNode.splitText) {
+                found = true;
+                break;
+            }
+        }
+        return found;
+    }
     function visualUpdateForContentWindow(query) {
         self.visualClear();
 
-        // always find from the beginning
-        selection.setPosition(document.body.firstChild, 0);
         var scrollTop = document.body.scrollTop,
             posToStartFind = [selection.anchorNode, selection.anchorOffset];
 
-        if (window.find(query, caseSensitive)) {
+        if (findNextTextNodeBy(query, caseSensitive)) {
+            selection.setPosition(posToStartFind[0], posToStartFind[1]);
+        } else {
+            // start from beginning if no found from current position
+            selection.setPosition(document.body.firstChild, 0);
+        }
+
+        if (findNextTextNodeBy(query, caseSensitive)) {
             if (document.body.scrollTop !== scrollTop) {
                 // set new start position if there is no occurrence in current view.
                 scrollTop = document.body.scrollTop;
@@ -407,7 +429,7 @@ var Visual = (function(mode) {
             matches.push(mark);
             selection.setPosition(mark.nextSibling, 0);
 
-            while(document.body.scrollTop === scrollTop && window.find(query, caseSensitive)) {
+            while(document.body.scrollTop === scrollTop && findNextTextNodeBy(query, caseSensitive)) {
                 var mark = createMatchMark(selection.anchorNode, selection.anchorOffset, query.length);
                 matches.push(mark);
                 selection.setPosition(mark.nextSibling, 0);
@@ -444,5 +466,12 @@ var Visual = (function(mode) {
     runtime.on('visualEnter', function(message) {
         self.visualEnter(message.query);
     });
+
+    self.style = function (element, style) {
+        self._style[element] = style;
+
+        cursor.setAttribute('style', self._style.cursor || '');
+        mark_template.setAttribute('style', self._style.marks || '');
+    };
     return self;
 })(Mode);

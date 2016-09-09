@@ -20,8 +20,10 @@ var frontendFrame = (function() {
 
     self.setFrontFrame = function(response) {
         ifr.css('height', response.frameHeight);
-        ifr.css('pointer-events', response.pointerEvents);
-        if (response.frameHeight === '0px') {
+        if (response.pointerEvents) {
+            ifr.css('pointer-events', response.pointerEvents);
+        }
+        if (response.hostBlur) {
             uiHost.blur();
         }
     };
@@ -46,27 +48,6 @@ var frontendFrame = (function() {
     return self;
 })();
 
-runtime.command({
-    action: 'getSettings',
-    key: ['blacklist', 'blacklistPattern']
-}, function(response) {
-    if (checkBlackList(response.settings)) {
-        runtime.command({
-            action: 'setSurfingkeysIcon',
-            status: true
-        });
-    }
-});
-
-runtime.on('settingsUpdated', function(response) {
-    if ('blacklist' in response.settings) {
-        runtime.command({
-            action: 'setSurfingkeysIcon',
-            status: checkBlackList(response.settings)
-        });
-    }
-});
-
 document.addEventListener('DOMContentLoaded', function(e) {
 
     runtime.command({
@@ -80,8 +61,9 @@ document.addEventListener('DOMContentLoaded', function(e) {
         fakeBody.remove();
         frontendFrame.contentWindow = null;
     }
-    createFrontEnd();
     setTimeout(function() {
+        // to avoid conflict with pdf extension: chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/
+        createFrontEnd();
         for (var p in AutoCommands) {
             var c = AutoCommands[p];
             if (c.regex.test(window.location.href)) {
@@ -113,7 +95,7 @@ function _setScrollPos(x, y) {
 }
 
 function _prepareFrames() {
-    var frames = Array.prototype.slice.call(top.document.querySelectorAll('iframe')).map(function(f) {
+    var frames = Array.prototype.slice.call(top.document.querySelectorAll('frame,iframe')).map(function(f) {
         return f.contentWindow;
     });
     frames.unshift(top);

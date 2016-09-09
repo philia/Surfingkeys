@@ -4,7 +4,7 @@ var Hints = (function(mode) {
     self.addEventListener('keydown', function(event) {
         var updated = false;
         var hints = holder.find('>div');
-        if (event.sk_keyName === Mode.specialKeys["<Esc>"]) {
+        if (Mode.isSpecialKeyOf("<Esc>", event.sk_keyName)) {
             hide();
         } else if (event.keyCode === KeyboardUtils.keyCodes.space) {
             holder.hide();
@@ -173,7 +173,6 @@ var Hints = (function(mode) {
             behaviours[attr] = attrs[attr];
         }
         holder.show().html('');
-        style.appendTo(holder);
         if (cssSelector === "") {
             cssSelector = "a, button, select:visible, input:visible, textarea:visible";
             if (!runtime.conf.hintsThreshold || $('*').length < runtime.conf.hintsThreshold) {
@@ -212,10 +211,11 @@ var Hints = (function(mode) {
         if (elements.length > 0) {
             var hintLabels = self.genLabels(elements.length);
             var bof = self.coordinate();
+            style.appendTo(holder);
             elements.each(function(i) {
                 var pos = $(this).offset(),
                     z = getZIndex(this);
-                var link = $('<div/>').css('top', pos.top - bof.top).css('left', pos.left - bof.left + $(this).width() / 2)
+                var link = $('<div/>').css('top', Math.max(pos.top - bof.top, 0)).css('left', Math.max(pos.left - bof.left + $(this).width() / 2, 0))
                     .css('z-index', z + 9999)
                     .data('z-index', z + 9999)
                     .data('label', hintLabels[i])

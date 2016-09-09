@@ -146,13 +146,13 @@ function map(new_keystroke, old_keystroke, domain, new_annotation) {
         } else {
             var old_map = Normal.mappings.find(old_keystroke);
             if (old_map) {
-                var meta = old_map.meta[0];
+                var meta = old_map.meta;
                 var ag = (!Front.isProvider()) ? null : {annotation: new_annotation || meta.annotation, feature_group: meta.feature_group};
                 var keybound = createKeyTarget(meta.code, ag, meta.extra_chars, meta.repeatIgnore);
                 Normal.mappings.remove(new_keystroke);
                 Normal.mappings.add(new_keystroke, keybound);
             } else if (old_keystroke in Mode.specialKeys) {
-                Mode.specialKeys[old_keystroke] = new_keystroke;
+                Mode.specialKeys[old_keystroke].push(new_keystroke);
             }
         }
     }
@@ -323,12 +323,25 @@ function applySettings(rs) {
     if (('snippets' in rs) && rs.snippets) {
         var delta = runUserScript(rs.snippets);
         if (!jQuery.isEmptyObject(delta.settings)) {
-            // overrides local settings from snippets
             if ('theme' in delta.settings) {
                 $(document).trigger("surfingkeys:themeChanged", [delta.settings.theme]);
                 delete delta.settings.theme;
             }
-            $.extend(runtime.conf, delta.settings);
+            // overrides local settings from snippets
+            for (var k in delta.settings) {
+                if (runtime.conf.hasOwnProperty(k)) {
+                    runtime.conf[k] = delta.settings[k];
+                    delete delta.settings[k];
+                }
+            }
+            if (Object.keys(delta.settings).length > 0) {
+                // left settings are for background, need not broadcast the update, neither persist into storage
+                runtime.command({
+                    action: 'updateSettings',
+                    scope: "snippets",
+                    settings: delta.settings
+                });
+            }
         } else if (delta.error !== "" && window === top) {
             Front.showPopup("Error found in settings: " + delta.error);
         }
@@ -338,12 +351,18 @@ function applySettings(rs) {
 runtime.on('settingsUpdated', function(response) {
     var rs = response.settings;
     applySettings(rs);
-    if ('blacklist' in rs) {
-        if (checkBlackList(rs)) {
-            Disabled.enter();
-        } else {
-            Disabled.exit();
-        }
+    var disabled = checkBlackList(runtime.conf);
+    if (disabled) {
+        Disabled.enter();
+    } else {
+        Disabled.exit();
+    }
+
+    if (window === top) {
+        runtime.command({
+            action: 'setSurfingkeysIcon',
+            status: disabled
+        });
     }
 });
 
@@ -361,11 +380,19 @@ runtime.command({
 
     Normal.enter();
 
-    if (checkBlackList(rs)) {
+    var disabled = checkBlackList(runtime.conf);
+    if (disabled) {
         Disabled.enter();
     } else {
         document.addEventListener('DOMContentLoaded', function(e) {
             GetBackFocus.enter();
+        });
+    }
+
+    if (window === top) {
+        runtime.command({
+            action: 'setSurfingkeysIcon',
+            status: disabled
         });
     }
 });

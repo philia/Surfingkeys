@@ -456,6 +456,17 @@ works like
     Omnibar.listWords(<array of words>)
     Omnibar.html(<any html snippets>)
 
+### Styling
+
+Change the style of the link hints:
+
+    Hints.style('border: solid 3px #552a48; color:#efe1eb; background: initial; background-color: #552a48;');
+
+Change the style of the search marks and cursor:
+
+    Visual.style('marks', 'background-color: #89a1e2;');
+    Visual.style('cursor', 'background-color: #9065b7;');
+
 ## Build
 
     npm install
@@ -463,12 +474,12 @@ works like
 
 ## Credits
 
-* [jQuery](https://github.com/jquery/jquery)
-* [TRIE](https://github.com/mikedeboer/trie)
-* [ACE vim editor](https://github.com/ajaxorg/ace)
-* [markdown parser](https://github.com/chjj/marked)
-* [vimium](https://github.com/philc/vimium)
-* [cVim](https://github.com/1995eaton/chromium-vim)
+* [jQuery](https://github.com/jquery/jquery), for clean coding.
+* [TRIE](https://github.com/mikedeboer/trie), finally replaced by my own simple implementation for less memory usage and better performance.
+* [ACE vim editor](https://github.com/ajaxorg/ace), for vim editor.
+* [markdown parser](https://github.com/chjj/marked), for markdown parser.
+* [vimium](https://github.com/philc/vimium), for the days without this extension.
+* [cVim](https://github.com/1995eaton/chromium-vim), for the days without this extension.
 
 ## License
 
