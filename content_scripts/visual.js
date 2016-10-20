@@ -123,7 +123,13 @@ var Visual = (function(mode) {
     self.mappings.add("gg", {
         annotation: "backward documentboundary",
         feature_group: 9,
-        code: modifySelection
+        code: function() {
+            // there may be some fixed-position div for navbar on top on some pages.
+            // so scrollIntoView can not send us top, as it's already in view.
+            // explicitly set scrollTop 0 here.
+            document.body.scrollTop = 0;
+            modifySelection();
+        }
     });
     self.mappings.add("y", {
         annotation: "Copy selected text",
@@ -172,11 +178,13 @@ var Visual = (function(mode) {
             }
         }
         if (!node) {
-            var nodes = getTextNodes(document.body, /./);
-            var anodes = nodes.filter(function(i) {
-                return ($(i.parentNode).offset().top > (document.body.scrollTop + window.innerHeight / 3));
-            });
-            node = (anodes.length) ? anodes[0] : nodes[0];
+            var treeWalker = getTextNodes(document.body, /./, 0);
+            while(treeWalker.nextNode()) {
+                if ($(treeWalker.currentNode.parentNode).offset().top > (document.body.scrollTop + window.innerHeight / 3)) {
+                    node = treeWalker.currentNode;
+                    break;
+                }
+            }
         }
         return [node, offset];
     }
@@ -254,20 +262,32 @@ var Visual = (function(mode) {
         scrollIntoView();
     }
 
-    function getTextNodes(root, pattern) {
+    function getTextNodes(root, pattern, flag) {
         var skip_tags = ['script', 'style', 'noscript', 'surfingkeys_mark'];
-        var nodeIterator = document.createNodeIterator(
+        var treeWalker = document.createTreeWalker(
             root,
             NodeFilter.SHOW_TEXT, {
                 acceptNode: function(node) {
                     if (!node.data.trim() || !node.parentNode.offsetParent || skip_tags.indexOf(node.parentNode.localName.toLowerCase()) !== -1 || !pattern.test(node.data))
                         return NodeFilter.FILTER_REJECT;
+                    var br = node.parentNode.getBoundingClientRect();
+                    if (br.width < 4 || br.height < 4) {
+                        return NodeFilter.FILTER_REJECT;
+                    }
                     return NodeFilter.FILTER_ACCEPT;
                 }
             }, false);
 
         var nodes = [];
-        for (var node; node = nodeIterator.nextNode(); nodes.push(node));
+        if (flag === 1) {
+            nodes.push(treeWalker.firstChild());
+        } else if (flag === -1) {
+            nodes.push(treeWalker.lastChild());
+        } else if (flag === 0) {
+            return treeWalker;
+        } else {
+            while(treeWalker.nextNode()) nodes.push(treeWalker.currentNode);
+        }
         return nodes;
     }
 

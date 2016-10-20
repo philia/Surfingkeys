@@ -20,6 +20,14 @@
 //
 // ************************* WARNING *************************
 
+imapkey("<Ctrl-'>", '', function() {
+    var val = document.activeElement.value;
+    if (val[0] === '"') {
+        document.activeElement.value = val.substr(1, val.length - 2);
+    } else {
+        document.activeElement.value = '"' + val + '"';
+    }
+});
 imapkey('<Ctrl-i>', '#15Open vim editor for current input', function() {
     var element = document.activeElement;
     Front.showEditor(element, function(data) {
@@ -200,14 +208,21 @@ mapkey('F', '#4Go one tab history forward', 'RUNTIME("historyTab", {backward: fa
 mapkey('S', '#4Go back in history', 'history.go(-1)', {repeatIgnore: true});
 mapkey('D', '#4Go forward in history', 'history.go(1)', {repeatIgnore: true});
 mapkey('r', '#4Reload the page', 'RUNTIME("reloadTab", { nocache: false })');
-mapkey('t', '#8Open an URL', 'Front.openOmnibar({type: "URLs", extra: "getAllSites"})');
-mapkey('go', '#8Open an URL in current tab', 'Front.openOmnibar({type: "URLs", extra: "getAllSites", tabbed: false})');
+mapkey('t', '#8Open a URL', 'Front.openOmnibar({type: "URLs", extra: "getAllSites"})');
+mapkey('go', '#8Open a URL in current tab', 'Front.openOmnibar({type: "URLs", extra: "getAllSites", tabbed: false})');
 mapkey('ox', '#8Open recently closed URL', 'Front.openOmnibar({type: "URLs", extra: "getRecentlyClosed"})');
 mapkey('H', '#8Open opened URL in current tab', 'Front.openOmnibar({type: "URLs", extra: "getTabURLs"})');
 mapkey('Q', '#8Open omnibar for word translation', function() {
     Front.openOmniquery({
         url: "https://api.shanbay.com/bdc/search/?word=",
+        /*
+         * or
+        url: function(q) {
+            return "https://api.shanbay.com/bdc/search/?word=" + q
+        },
+        */
         query: Visual.getWordUnderCursor(),
+        style: "opacity: 0.8;",
         parseResult: function(res) {
             var res = eval("a=" + res.text);
             return [res.data.definition || res.msg];
@@ -384,10 +399,20 @@ mapkey(';p', '#7Paste html on current page', function() {
     });
 });
 mapkey(';q', '#14Insert jquery library on current page', 'Normal.insertJS("//ajax.aspnetcdn.com/ajax/jQuery/jquery-2.1.4.min.js")');
+mapkey('gt', 'Translate selected text with google', function() {
+    searchSelectedWith('https://translate.google.com/?hl=en#auto/en/', false, false, '');
+});
 
 addSearchAliasX('g', 'google', 'https://www.google.com/search?q=', 's', 'https://www.google.com/complete/search?client=chrome-omni&gs_ri=chrome-ext&oit=1&cp=1&pgcl=7&q=', function(response) {
     var res = eval(response.text);
     Omnibar.listWords(res[1]);
+});
+addSearchAliasX('d', 'duckduckgo', 'https://duckduckgo.com/?q=', 's', 'https://duckduckgo.com/ac/?q=', function(response) {
+    var res = eval(response.text);
+    res = res.map(function(r){
+        return r.phrase;
+    });
+    Omnibar.listWords(res);
 });
 addSearchAliasX('b', 'baidu', 'https://www.baidu.com/s?wd=', 's', 'http://suggestion.baidu.com/su?cb=eval&wd=', function(response) {
     var res = eval(response.text);

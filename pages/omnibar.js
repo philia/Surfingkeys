@@ -211,7 +211,7 @@ var Omnibar = (function(ui) {
         if (url === undefined) {
             url = self.input.val();
             if (url.indexOf(':') === -1) {
-                url = "http://" + url;
+                url = SearchEngine.aliases[SearchEngine.default].url + url;
             }
         }
         if (/^javascript:/.test(url)) {
@@ -377,11 +377,11 @@ var OpenBookmarks = (function() {
             onFolderUp();
             eaten = true;
         } else if (event.ctrlKey && KeyboardUtils.isWordChar(event)) {
-            var focusedURL = Omnibar.resultsDiv.find('li.focused>div.url');
-            if (focusedURL.length) {
+            var fi = Omnibar.resultsDiv.find('li.focused');
+            if (fi.length) {
                 var mark_char = String.fromCharCode(event.keyCode);
                 // global marks always from here
-                Normal.addVIMark(mark_char, focusedURL.data('url'));
+                Normal.addVIMark(mark_char, fi.data('url'));
                 eaten = true;
             }
         }
@@ -626,6 +626,7 @@ Omnibar.addHandler('VIMarks', OpenVIMarks);
 var SearchEngine = (function() {
     var self = {};
     self.aliases = {};
+    self.default = 'g';
 
     self.onOpen = function(arg) {
         $.extend(self, self.aliases[arg]);

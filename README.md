@@ -108,7 +108,8 @@ When focus is switched into any editable element by whatever means(`i` hints or 
 
 All mappings added with `imapkey` work in this mode.
 
-    `Ctrl - i` to open vim editor to edit.
+* `Ctrl - i` to open vim editor to edit.
+* `Ctrl - '` to toggle quotes in an input element, this is useful for search engines like google.
 
 ### Find
 
@@ -123,13 +124,13 @@ The omnibar provides kinds of functions that need user input, for example,
 * Open search engines with `og` / `ow` ...
 * Open commands with `:`
 
-In omnibar opened with `t`
+In omnibar opened with `t`:
 
-    `Ctrl - d` to delete from bookmark or history
+`Ctrl - d` to delete from bookmark or history
 
-In omnibar opened with `b`
+In omnibar opened with `b`:
 
-    `Ctrl - <any letter>` to create vim-like global mark
+`Ctrl - <any letter>` to create vim-like global mark
 
 ![search_engine](https://cloud.githubusercontent.com/assets/288207/17644214/759ef1d4-61b3-11e6-9bd9-70c38c8b80e0.gif)
 
@@ -421,6 +422,18 @@ mapkey in visual mode
 |**keystroke**                   | string, the existing keystroke that will be removed.|
 |**domain_pattern**              | regex[optional], a Javascript regex pattern to identify the domains that this settings works.|
 
+### remove all keystroke mappings
+
+    unmapAllExcept(keystrokes, [domain_pattern])
+
+| parameter  | explanation |
+|:---------------| :-----|
+|**keystrokes**                  | array of string, the existing keystrokes that will be removed.|
+|**domain_pattern**              | regex[optional], a Javascript regex pattern to identify the domains that this settings works.|
+
+Example,
+
+    unmapAllExcept(['f', '/', '?']);
 
 ### Add search alias to omnibar
 

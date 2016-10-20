@@ -79,7 +79,7 @@ var Front = (function() {
     self.openOmniquery = function(args) {
         onOmniQuery = function(query) {
             httpRequest({
-                'url': args.url + query
+                'url': (typeof(args.url) === "function") ? args.url(query) : args.url + query
             }, function(res) {
                 var words = args.parseResult(res);
 
@@ -89,7 +89,7 @@ var Front = (function() {
                 });
             });
         };
-        self.openOmnibar(({type: "OmniQuery", extra: args.query}))
+        self.openOmnibar(({type: "OmniQuery", extra: args.query, style: args.style}))
     };
 
     self.openFinder = function() {

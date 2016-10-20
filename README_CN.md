@@ -106,7 +106,8 @@ Surfingkeys有三种模式：normal，visual和insert。
 当输入焦点定位到各类输入框时（无论你是通过`i`或`f`选择定位还是鼠标点击定位的），就进入该模式。
 通过函数`imapkey`添加的所有按键都只在这种模式下有用。
 
-    `Ctrl - i` 打开vim编辑器。
+* `Ctrl - i` 打开vim编辑器。
+* `Ctrl - '` 把输入框里的内容用双引号引起来或去除双引号，方便在搜索引擎页面上搜索时使用。
 
 ### 查找
 
@@ -123,11 +124,11 @@ Surfingkeys有三种模式：normal，visual和insert。
 
 用`t`打开搜索栏时，
 
-    `Ctrl - d` 可以从收藏夹或访问历史中删除选中项
+`Ctrl - d` 可以从收藏夹或访问历史中删除选中项。
 
 用`b`打开搜索栏时，
 
-    `Ctrl - <any letter>` 创建相应的类似vim的全局标示。
+`Ctrl - <any letter>` 创建相应的类似vim的全局标示。
 
 ![search_engine](https://cloud.githubusercontent.com/assets/288207/17644214/759ef1d4-61b3-11e6-9bd9-70c38c8b80e0.gif)
 
@@ -417,6 +418,18 @@ Surfingkeys默认使用[这个markdown分析器](https://github.com/chjj/marked)
 |**keystroke**                   | 字符串，将要删除的按键。|
 |**domain_pattern**              | 正则表达式[可选]，表明只有当域名匹配时，该操作会生效。|
 
+### 删除所有按键映射
+
+    unmapAllExcept(keystrokes, [domain_pattern])
+
+| 参数  | 含义 |
+|:---------------| :-----|
+|**keystrokes**                  | 字符串数组，将要删除的按键。|
+|**domain_pattern**              | 正则表达式[可选]，表明只有当域名匹配时，该操作会生效。|
+
+示例,
+
+    unmapAllExcept(['f', '/', '?']);
 
 ### 在搜索栏里添加搜索别名
 
