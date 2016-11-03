@@ -3,7 +3,23 @@ var Visual = (function(mode) {
 
     self.addEventListener('keydown', function(event) {
         var updated = "";
-        if (Mode.isSpecialKeyOf("<Esc>", event.sk_keyName)) {
+        if (visualf) {
+            var exitf = false;
+            event.sk_suppressed = true;
+
+            if (KeyboardUtils.isWordChar(event)) {
+                visualSeek(visualf, event.sk_keyName);
+                lastF = [visualf, event.sk_keyName];
+                exitf = true;
+            } else if (Mode.isSpecialKeyOf("<Esc>", event.sk_keyName)) {
+                exitf = true;
+            }
+
+            if (exitf) {
+                Front.showStatus(2, status[state]);
+                visualf = 0;
+            }
+        } else if (Mode.isSpecialKeyOf("<Esc>", event.sk_keyName)) {
             if (state > 1) {
                 cursor.remove();
                 selection.collapse(selection.anchorNode, selection.anchorOffset);
@@ -118,7 +134,13 @@ var Visual = (function(mode) {
     self.mappings.add("G", {
         annotation: "forward documentboundary",
         feature_group: 9,
-        code: modifySelection
+        code: function() {
+            modifySelection();
+            if (matches.length) {
+                currentOccurrence = matches.length - 1;
+                Front.showStatus(3, currentOccurrence + 1 + ' / ' + matches.length);
+            }
+        }
     });
     self.mappings.add("gg", {
         annotation: "backward documentboundary",
@@ -128,6 +150,10 @@ var Visual = (function(mode) {
             // so scrollIntoView can not send us top, as it's already in view.
             // explicitly set scrollTop 0 here.
             document.body.scrollTop = 0;
+            currentOccurrence = 0;
+            if (matches.length) {
+                Front.showStatus(3, currentOccurrence + 1 + ' / ' + matches.length);
+            }
             modifySelection();
         }
     });
@@ -157,6 +183,47 @@ var Visual = (function(mode) {
             Hints.dispatchMouseClick(selection.focusNode.parentNode);
         }
     });
+    self.mappings.add("zz", {
+        annotation: "make cursor at center of window.",
+        feature_group: 9,
+        code: function() {
+            document.body.scrollTop += cursor.getBoundingClientRect().top - window.innerHeight/2
+        }
+    });
+    self.mappings.add("f", {
+        annotation: "Forward to next char.",
+        feature_group: 9,
+        code: function() {
+            Front.showStatus(2, "Visual forward");
+            visualf = 1;
+        }
+    });
+    self.mappings.add("F", {
+        annotation: "Backward to next char.",
+        feature_group: 9,
+        code: function() {
+            Front.showStatus(2, "Visual backward");
+            visualf = -1;
+        }
+    });
+    self.mappings.add(";", {
+        annotation: "Repeat latest f, F",
+        feature_group: 9,
+        code: function() {
+            if (lastF) {
+                visualSeek(lastF[0], lastF[1]);
+            }
+        }
+    });
+    self.mappings.add(",", {
+        annotation: "Repeat latest f, F in opposite direction",
+        feature_group: 9,
+        code: function() {
+            if (lastF) {
+                visualSeek(-lastF[0], lastF[1]);
+            }
+        }
+    });
 
     var selection = document.getSelection(),
         caseSensitive = false,
@@ -166,6 +233,40 @@ var Visual = (function(mode) {
         status = ['', 'Caret', 'Range'],
         mark_template = $('<surfingkeys_mark>')[0],
         cursor = $('<div class="surfingkeys_cursor"></div>')[0];
+
+    // f in visual mode
+    var visualf = 0, lastF = null;
+
+    function visualSeek(dir, chr) {
+        hideCursor();
+        var lastPosBeforeF = [selection.focusNode, selection.focusOffset];
+        if (findNextTextNodeBy(chr, true, (dir === -1))) {
+            var fix = (dir === -1) ? -1 : 0;
+            if (state === 1) {
+                selection.setPosition(selection.focusNode, selection.focusOffset + fix);
+            } else {
+                var found = [selection.focusNode, selection.focusOffset + fix];
+                selection.collapseToStart();
+                selection.setPosition(lastPosBeforeF[0], lastPosBeforeF[1]);
+                selection.extend(found[0], found[1]);
+            }
+        } else {
+            selection.setPosition(lastPosBeforeF[0], lastPosBeforeF[1]);
+        }
+        showCursor();
+    }
+
+    function getTextNodeByY(y) {
+        var node = null;
+        var treeWalker = getTextNodes(document.body, /./, 0);
+        while (treeWalker.nextNode()) {
+            if ($(treeWalker.currentNode.parentNode).offset().top > (document.body.scrollTop + window.innerHeight * y)) {
+                node = treeWalker.currentNode;
+                break;
+            }
+        }
+        return node;
+    }
 
     function getStartPos() {
         var node = null,
@@ -178,13 +279,7 @@ var Visual = (function(mode) {
             }
         }
         if (!node) {
-            var treeWalker = getTextNodes(document.body, /./, 0);
-            while(treeWalker.nextNode()) {
-                if ($(treeWalker.currentNode.parentNode).offset().top > (document.body.scrollTop + window.innerHeight / 3)) {
-                    node = treeWalker.currentNode;
-                    break;
-                }
-            }
+            node = getTextNodeByY(0.3);
         }
         return [node, offset];
     }
@@ -286,7 +381,7 @@ var Visual = (function(mode) {
         } else if (flag === 0) {
             return treeWalker;
         } else {
-            while(treeWalker.nextNode()) nodes.push(treeWalker.currentNode);
+            while (treeWalker.nextNode()) nodes.push(treeWalker.currentNode);
         }
         return nodes;
     }
@@ -379,18 +474,24 @@ var Visual = (function(mode) {
     self.star = function() {
         if (selection.focusNode && selection.focusNode.nodeValue) {
             hideCursor();
+            var pos = [selection.focusNode, selection.focusOffset];
             var query = self.getWordUnderCursor();
             runtime.updateHistory('find', query);
             self.visualClear();
+            selection.setPosition(pos[0], pos[1]);
             highlight(new RegExp(query, "g" + (caseSensitive ? "" : "i")));
             showCursor();
         }
     };
 
     self.getWordUnderCursor = function() {
+        hideCursor();
         var word = selection.toString();
         if (word.length === 0 && selection.focusNode && selection.focusNode.nodeValue) {
-            word = getNearestWord(selection.focusNode.nodeValue, selection.focusOffset);
+            word = getNearestWord(selection.focusNode.nodeValue, selection.focusOffset - 1);
+        }
+        if (state > 0) {
+            showCursor();
         }
         return word;
     };
@@ -414,11 +515,9 @@ var Visual = (function(mode) {
         }, 1);
     };
 
-    function findNextTextNodeBy(query, caseSensitive) {
+    function findNextTextNodeBy(query, caseSensitive, backwards) {
         var found = false;
-        var pos = [selection.anchorNode, selection.anchorOffset];
-        while(window.find(query, caseSensitive) && (selection.anchorNode != pos[0] || selection.anchorOffset != pos[1])) {
-            pos = [selection.anchorNode, selection.anchorOffset];
+        while (window.find(query, caseSensitive, backwards)) {
             if (selection.anchorNode.splitText) {
                 found = true;
                 break;
@@ -429,17 +528,20 @@ var Visual = (function(mode) {
     function visualUpdateForContentWindow(query) {
         self.visualClear();
 
+        // set caret to top in view
+        selection.setPosition(getTextNodeByY(0), 0);
+
         var scrollTop = document.body.scrollTop,
             posToStartFind = [selection.anchorNode, selection.anchorOffset];
 
-        if (findNextTextNodeBy(query, caseSensitive)) {
+        if (findNextTextNodeBy(query, caseSensitive, false)) {
             selection.setPosition(posToStartFind[0], posToStartFind[1]);
         } else {
             // start from beginning if no found from current position
             selection.setPosition(document.body.firstChild, 0);
         }
 
-        if (findNextTextNodeBy(query, caseSensitive)) {
+        if (findNextTextNodeBy(query, caseSensitive, false)) {
             if (document.body.scrollTop !== scrollTop) {
                 // set new start position if there is no occurrence in current view.
                 scrollTop = document.body.scrollTop;
@@ -449,7 +551,7 @@ var Visual = (function(mode) {
             matches.push(mark);
             selection.setPosition(mark.nextSibling, 0);
 
-            while(document.body.scrollTop === scrollTop && findNextTextNodeBy(query, caseSensitive)) {
+            while (document.body.scrollTop === scrollTop && findNextTextNodeBy(query, caseSensitive, false)) {
                 var mark = createMatchMark(selection.anchorNode, selection.anchorOffset, query.length);
                 matches.push(mark);
                 selection.setPosition(mark.nextSibling, 0);

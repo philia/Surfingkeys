@@ -630,6 +630,10 @@ var SearchEngine = (function() {
 
     self.onOpen = function(arg) {
         $.extend(self, self.aliases[arg]);
+        var q = Omnibar.input.val();
+        var b = q.match(/^(site:\S+\s*).*/);
+        var start = b ? b[1].length : 0;
+        Omnibar.input[0].setSelectionRange(start, q.length);
     };
     self.onClose = function() {
         self.prompt = undefined;
@@ -681,11 +685,10 @@ var Commands = (function() {
         }, function(response) {
             var candidates = response.settings.cmdHistory;
             if (candidates.length) {
+                Omnibar.focusedItem = candidates.length;
                 Omnibar.listResults(candidates, function(c) {
                     return $('<li/>').data('cmd', c).html(c);
                 });
-                Omnibar.focusedItem = 0;
-                Omnibar.input.val(candidates[0]);
             }
         });
     };

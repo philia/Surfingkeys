@@ -184,6 +184,8 @@ mapkey('f', '#1Open a link, press SHIFT to flip hints if they are overlapped.', 
 mapkey('af', '#1Open a link in new tab', 'Hints.create("", Hints.dispatchMouseClick, {tabbed: true})');
 mapkey('gf', '#1Open a link in non-active new tab', 'Hints.create("", Hints.dispatchMouseClick, {tabbed: true, active: false})');
 mapkey('cf', '#1Open multiple links in a new tab', 'Hints.create("", Hints.dispatchMouseClick, {tabbed: true, active: false, multipleHits: true})');
+mapkey('<Ctrl-h>', '#1Mouse over elements.', 'Hints.create("", Hints.dispatchMouseClick, {mouseEvents: ["mouseover"]})');
+mapkey('<Ctrl-j>', '#1Mouse out elements.', 'Hints.create("", Hints.dispatchMouseClick, {mouseEvents: ["mouseout"]})');
 mapkey('ya', '#7Copy a link URL to the clipboard', function() {
     Hints.create('*[href]', function(element, event) {
         Front.writeClipboard(element.href);
@@ -283,7 +285,7 @@ vmapkey('<Ctrl-d>', '#9Forward 20 lines', function() {
 mapkey('x', '#3Close current tab', 'RUNTIME("closeTab")');
 mapkey('X', '#3Restore closed tab', 'RUNTIME("openLast")');
 mapkey('<Ctrl-1>', '#0show pressed key', function(key) {
-    Front.showPopup(htmlEncode(key));
+    Front.showPopup(htmlEncode(decodeKeystroke(key)));
 }, {extra_chars: 1});
 mapkey('m', '#10Add current URL to vim-like marks', Normal.addVIMark, {extra_chars: 1});
 mapkey("'", '#10Jump to vim-like mark', Normal.jumpVIMark, {extra_chars: 1});
