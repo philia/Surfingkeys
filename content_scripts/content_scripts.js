@@ -167,6 +167,7 @@ function unmap(keystroke, domain) {
 function unmapAllExcept(keystrokes, domain) {
     if (!domain || domain.test(window.location.origin)) {
         var _mappings = new Trie();
+        keystrokes = keystrokes || [];
         for (var i = 0, il = keystrokes.length; i < il; i++) {
             var ks = encodeKeystroke(keystrokes[i]);
             var node = Normal.mappings.find(ks);
@@ -176,6 +177,18 @@ function unmapAllExcept(keystrokes, domain) {
         }
         delete Normal.mappings;
         Normal.mappings = _mappings;
+        Normal.map_node = _mappings;
+    }
+}
+
+function imap(new_keystroke, old_keystroke, domain, new_annotation) {
+    if (!domain || domain.test(window.location.origin)) {
+        var old_map = Insert.mappings.find(encodeKeystroke(old_keystroke));
+        if (old_map) {
+            var nks = encodeKeystroke(new_keystroke);
+            Insert.mappings.remove(nks);
+            Insert.mappings.add(nks, old_map.meta);
+        }
     }
 }
 
@@ -218,25 +231,47 @@ function walkPageUrl(step) {
     }
 }
 
-function tabOpenLink(str) {
-    var urls = str.trim().split('\n').slice(0, 10).forEach(function(url) {
-        url = url.trim();
-        if (url.length > 0) {
-            if (/^(?:https?:\/\/)?(?:[^@\/\n]+@)?(?:www\.)?([^:\/\n]+)/im.test(url)) {
-                if (/^[\w-]+?:\/\//i.test(url)) {
-                    url = url
-                } else {
-                    url = "http://" + url;
-                }
-            }
-            RUNTIME("openLink", {
-                tab: {
-                    tabbed: true
-                },
-                url: url
-            });
-        }
+function tabOpenLink(str, simultaneousness) {
+    simultaneousness = simultaneousness || 5;
+
+    var urls;
+    if (str.constructor.name === "Array") {
+        urls = str
+    } else if (str.constructor.name === "jQuery") {
+        urls = str.map(function() {
+            return this.href;
+        }).toArray();
+    } else {
+        urls = str.trim().split('\n');
+    }
+
+    urls = urls.map(function(u) {
+        return u.trim();
+    }).filter(function(u) {
+        return u.length > 0;
     });
+    // open the first batch links immediately
+    urls.slice(0, simultaneousness).forEach(function(url) {
+        if (/^(?:https?:\/\/)?(?:[^@\/\n]+@)?(?:www\.)?([^:\/\n]+)/im.test(url)) {
+            if (/^[\w-]+?:\/\//i.test(url)) {
+                url = url
+            } else {
+                url = "http://" + url;
+            }
+        }
+        RUNTIME("openLink", {
+            tab: {
+                tabbed: true
+            },
+            url: url
+        });
+    });
+    // queue the left for later opening when there is one tab closed.
+    if (urls.length > simultaneousness) {
+        RUNTIME("queueURLs", {
+            urls: urls.slice(simultaneousness)
+        });
+    }
 }
 
 function searchSelectedWith(se, onlyThisSite, interactive, alias) {
@@ -282,28 +317,31 @@ function clickOn(links, force) {
     }
 }
 
-function getFormData(form) {
-    var unindexed_array = $(form).serializeArray();
-    var indexed_array = {};
+function getFormData(form, format) {
+    if (format === "json") {
+        var unindexed_array = $(form).serializeArray();
+        var indexed_array = {};
 
-    $.map(unindexed_array, function(n, i){
-        var nn = n['name'];
-        var vv = n['value'];
-        if (indexed_array.hasOwnProperty(nn)) {
-            var p = indexed_array[nn];
-            if (p.constructor.name === "Array") {
-                p.push(vv);
+        $.map(unindexed_array, function(n, i){
+            var nn = n['name'];
+            var vv = n['value'];
+            if (indexed_array.hasOwnProperty(nn)) {
+                var p = indexed_array[nn];
+                if (p.constructor.name === "Array") {
+                    p.push(vv);
+                } else {
+                    indexed_array[nn] = [];
+                    indexed_array[nn].push(p);
+                    indexed_array[nn].push(vv);
+                }
             } else {
-                indexed_array[nn] = [];
-                indexed_array[nn].push(p);
-                indexed_array[nn].push(vv);
+                indexed_array[nn] = vv;
             }
-        } else {
-            indexed_array[nn] = vv;
-        }
-    });
-
-    return indexed_array;
+        });
+        return indexed_array;
+    } else {
+        return $(form).serialize();
+    }
 }
 
 function httpRequest(args, onSuccess) {

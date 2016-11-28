@@ -270,6 +270,15 @@ command('openSession', 'openSession [name]', function(args) {
         name: args[0]
     });
 });
+command('listQueueURLs', 'list URLs in queue waiting for open', function(args) {
+    runtime.command({
+        action: 'getQueueURLs'
+    }, function(response) {
+        Omnibar.listResults(response.queueURLs, function(s) {
+            return $('<li/>').html(s);
+        });
+    });
+});
 mapkey('v', '#9Toggle visual mode', 'Visual.toggle()');
 mapkey('/', '#9Find in current page', 'Front.openFinder()');
 mapkey('*', '#9Find selected text in current page', function() {
@@ -352,10 +361,21 @@ mapkey('yd', "#7Copy current downloading URL", function() {
 mapkey('yt', '#3Duplicate current tab', 'RUNTIME("duplicateTab")');
 mapkey('yy', "#7Copy current page's URL", 'Front.writeClipboard(window.location.href)');
 mapkey('yl', "#7Copy current page's title", 'Front.writeClipboard(document.title)');
-mapkey('yf', '#7Copy form data on current page', function() {
+mapkey('yf', '#7Copy form data in JSON on current page', function() {
     var aa = [];
     $('form').each(function() {
-        aa.push(getFormData(this));
+        var fd = {};
+        fd[(this.method || "get") + "::" + this.action] = getFormData(this, "json");
+        aa.push(fd);
+    });
+    Front.writeClipboard(JSON.stringify(aa, null, 4));
+});
+mapkey('yp', '#7Copy form data for POST on current page', function() {
+    var aa = [];
+    $('form').each(function() {
+        var fd = {};
+        fd[(this.method || "get") + "::" + this.action] = getFormData(this);
+        aa.push(fd);
     });
     Front.writeClipboard(JSON.stringify(aa, null, 4));
 });

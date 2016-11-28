@@ -218,6 +218,14 @@ var Insert = (function(mode) {
             element.setSelectionRange(pos[1], pos[1]);
         }
     });
+    self.mappings.add(encodeKeystroke("<Esc>"), {
+        annotation: "Exit insert mode.",
+        feature_group: 15,
+        code: function() {
+            document.activeElement.blur();
+            self.exit();
+        }
+    });
 
     self.addEventListener('keydown', function(event) {
         // prevent this event to be handled by Surfingkeys' other listeners
@@ -234,7 +242,36 @@ var Insert = (function(mode) {
                 self.exit();
             }, 0);
         } else if (event.sk_keyName.length) {
-            return Normal._handleMapKey.call(self, event.sk_keyName);
+            return Normal._handleMapKey.call(self, event.sk_keyName, function(last) {
+                var pw = last.getPrefixWord();
+                if (pw) {
+                    var elm = document.activeElement, str = elm.value, pos = elm.selectionStart;
+                    if (str !== undefined && pos !== undefined) {
+                        elm.value = str.substr(0, elm.selectionStart) + pw + str.substr(elm.selectionEnd);
+                        pos += pw.length;
+                        elm.setSelectionRange(pos, pos);
+                    } else {
+                        elm = document.getSelection();
+                        var range = elm.getRangeAt(0);
+                        var n = document.createTextNode(pw);
+                        if (elm.type === "Caret") {
+                            str = elm.focusNode.data;
+                            if (str === undefined) {
+                                range.insertNode(n);
+                                elm.setPosition(n, n.length);
+                            } else {
+                                pos = elm.focusOffset;
+                                elm.focusNode.data = str.substr(0, pos) + pw + str.substr(pos);
+                                elm.setPosition(elm.focusNode, pos + pw.length);
+                            }
+                        } else {
+                            range.deleteContents();
+                            range.insertNode(n);
+                            elm.setPosition(n, n.length);
+                        }
+                    }
+                }
+            });
         }
     });
     self.addEventListener('focus', function(event) {
@@ -521,7 +558,7 @@ var Normal = (function(mode) {
         return ret;
     };
 
-    self._handleMapKey = function(key) {
+    self._handleMapKey = function(key, beforeFinish) {
         var ret = "";
         var finish = self.finish.bind(this);
         if (this.pendingMap) {
@@ -543,8 +580,10 @@ var Normal = (function(mode) {
             Front.showKeystroke(key);
             ret = "stopEventPropagation";
         } else {
+            var last = this.map_node;
             this.map_node = this.map_node.find(key);
             if (!this.map_node) {
+                beforeFinish && beforeFinish(last);
                 finish();
             } else {
                 if (this.map_node.meta) {
@@ -588,8 +627,8 @@ var Normal = (function(mode) {
     };
 
     function saveLastKeys() {
-        RUNTIME('updateSettings', {
-            settings: {
+        RUNTIME('localData', {
+            data: {
                 lastKeys: lastKeys
             }
         });
