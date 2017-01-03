@@ -118,6 +118,7 @@ All mappings added with `imapkey` work in this mode.
 * `Ctrl - '` to toggle quotes in an input element, this is useful for search engines like google.
 * `Ctrl-e` move the cursor to the end of the line.
 * `Ctrl-f` move the cursor to the beginning of the line.
+* `Ctrl-u` delete all entered characters before the cursor.
 * `Alt-b` move the cursor Backward 1 word.
 * `Alt-f` move the cursor Forward 1 word.
 * `Alt-w` delete a word backwards.
@@ -140,6 +141,13 @@ The omnibar provides kinds of functions that need user input, for example,
 * Open bookmarks with `b`
 * Open search engines with `og` / `ow` ...
 * Open commands with `:`
+
+`Enter` to open selected item and close omnibar.
+`Ctrl-Enter` to open selected item, but keep omnibar open for more items to be opened.
+`Shift-Enter` to open selected item in current tab and close omnibar. If you'd like to open in current tab by default, please use `go`.
+
+`Tab` to forward cycle through the candidates.
+`Shift-Tab` to backward cycle through the candidates.
 
 In omnibar opened with `t`:
 
@@ -231,6 +239,10 @@ Smooth scroll works for any scrollable element. It is on by defualt, to turn it 
 
     settings.smoothScroll = false;
 
+`j`/`k` scrolls in one step with size as 70, you could change it as below:
+
+    settings.scrollStepSize = 140;
+
 ## Session management
 
 To create session in Chrome with Surfingkeys will save URLs for all tabs, and to open a session will open all the URLs of the session in different tab, so basically a session is a list of URLs, which has a name.
@@ -281,7 +293,7 @@ When Surfingkeys is turned off on some site by `Alt-s`, the status will be persi
         "https://github.com": 1
     },
 
-`Alt-s` once more will remove it from settings.blacklist. By the way, `yj` to dump all settings into clipboard.
+`Alt-s` once more will remove it from settings.blacklist. The data settings are not always presented in snippets, you could use `yj` to dump all settings into clipboard, then paste it in your text editor to check out.
 
 Another way to disable Surfingkeys is to use `settings.blacklistPattern`, please refer to [regex for disabling](https://github.com/brookhong/Surfingkeys/issues/63).
 
@@ -336,17 +348,17 @@ Thanks ACE for the vim editor, Surfingkeys integrates ACE for the vim editor. Th
 
 ### Edit any input on html page
 
-In normal mode, press capital `I`, then use a hint letter to pick up a input box. A vim editor is opened for you to edit text. The vim editor is opened in lightly different way for `input` and `textarea`.
+In normal mode, press capital `I`, then use a hint letter to pick up a input box. A vim editor is opened for you to edit text. The vim editor is opened in slightly different way for `<input>`, `<textarea>`, and `<select>` elements.
 
-For `input` element, the vim editor has only one line, you use vim-bindings keys to edit your text, then press `Enter` or `:w` to write your text back to the input element.
+For `<input>` elements, the vim editor has only one line, and you use vim key bindings to edit your text. Then press `Enter` or `:w` to write your text back to the `<input>` element.
 
 ![input_with_vim](https://cloud.githubusercontent.com/assets/288207/17644219/75a72b2e-61b3-11e6-8ce2-06c9cc94aeca.gif)
 
-For `textarea` element, the vim editor is opened in bigger size, after you complete your edit, then press `Ctrl-Enter` or `:w` to write your text back to the textarea element.
+For `<textarea>` elements, the vim editor is opened in bigger size. After you complete your edits, press `Ctrl-Enter` or `:w` to write your text back to the `<textarea>` element.
 
 ![textarea_with_vim](https://cloud.githubusercontent.com/assets/288207/17644217/75a27e44-61b3-11e6-8f21-9cd79d3c5776.gif)
 
-For `select` element, the vim editor is opened in bigger size, you are expected to edit the text, instead of, to search your option and jump to the line, then press `Enter` to select it. This is much handy for `select` element that has dozens of options.
+For `<select>` elements, the vim editor is again opened in bigger size. Instead of editing the text, search for the desired option and jump to the line, then press `Enter` to select it. This is handy for `<select>` elements which have lots of options.
 
 ![select_with_vim](https://cloud.githubusercontent.com/assets/288207/17644218/75a458a4-61b3-11e6-8ce7-eedcc996745c.gif)
 
@@ -356,7 +368,7 @@ For `select` element, the vim editor is opened in bigger size, you are expected 
 
 If you enter insert mode with `i` or mouse click, you will edit your input in normal way. You could also open vim editor at that time by pressing `Ctrl-i`.
 
-Remember that in insert mode, press `Ctrl-i` to open vim editor.
+Remember that in insert mode, press `Ctrl-i` to open the vim editor.
 
 ### Edit URL to open in new tab
 

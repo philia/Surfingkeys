@@ -116,6 +116,7 @@ Surfingkeys有三种模式：normal，visual和insert。
 * `Ctrl - '` 把输入框里的内容用双引号引起来或去除双引号，方便在搜索引擎页面上搜索时使用。
 * `Ctrl-e`移动光标到行尾。
 * `Ctrl-f` 移动光标到行首。
+* `Ctrl-u` 删除光标前所有输入。
 * `Alt-b` 移动光标到后一个词。
 * `Alt-f` 移动光标到前一个词。
 * `Alt-w` 往后删除一个词。
@@ -139,6 +140,13 @@ Surfingkeys有三种模式：normal，visual和insert。
 * 用`b`打开收藏夹
 * 用`og`/`ob`等打开搜索引擎
 * 用`:`打开命令模式
+
+`Enter` 打开选中项并关闭搜索栏。
+`Ctrl-Enter` 打开选中项，但不关闭搜索栏，你可以继续选中打开。
+`Shift-Enter` 在当前标签页打开选中项并关闭搜索栏。如果你希望默认就在当前标签页打开，可以使用`go`。
+
+`Tab` 在结果列表中向下切换。
+`Shift-Tab` 在结果列表中向上切换。
 
 用`t`打开搜索栏时，
 
@@ -230,6 +238,10 @@ search_leader_key(`s`)加上大写的别名(`G`)会打开搜索框让你可以�
 
     settings.smoothScroll = false;
 
+`j`/`k` 按一步70像素的距离滚动，你可以定制步长：
+
+    settings.scrollStepSize = 140;
+
 ## 会话管理
 
 用Surfingkeys在Chrome里保存会话相当于保存所有标签页的地址，打开会话则相当于在不同的标签页中打开所有保存其中的网页地址，所以会话基本上就是一个网页地址列表，每个会话有自己的名字。
@@ -280,7 +292,7 @@ search_leader_key(`s`)加上大写的别名(`G`)会打开搜索框让你可以�
         "https://github.com": 1
     },
 
-再按一次`Alt-s`会从settings.blacklist中删除该站点。另外，`yj`可以把当前设置复制到系统剪贴板。
+再按一次`Alt-s`会从settings.blacklist中删除该站点。这类状态并不保存在设置脚本里，你可以按`yj`把当前所有设置复制到系统剪贴板，然后粘贴到文本编辑器里查看。
 
 另一个禁用Surfingkeys的方法是用`settings.blacklistPattern`，请参考[regex for disabling](https://github.com/brookhong/Surfingkeys/issues/63).
 

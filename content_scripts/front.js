@@ -175,6 +175,10 @@ var Front = (function() {
         onOmniQuery(response.query);
     });
 
+    runtime.on('getFocusFromFront', function(response) {
+        document.body.focus();
+    });
+
     runtime.on('getPageText', function(response) {
         return document.body.innerText;
     });
@@ -194,11 +198,9 @@ var Front = (function() {
                 }
             });
 
-            if (Mode.stack().length === 0) {
-                // if mode stack is empty, enter normal mode automatically
-                Normal.enter();
-                GetBackFocus.enter();
-            }
+            Normal.exit();
+            Normal.enter();
+            GetBackFocus.enter();
         }
     };
 

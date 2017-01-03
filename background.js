@@ -12,7 +12,7 @@ var Service = (function() {
         contentPorts = {},
         tabActivated = {},
         tabMessages = {},
-        frameIncs = {},
+        frames = {},
         tabURLs = {},
         tabErrors = {};
 
@@ -103,6 +103,17 @@ var Service = (function() {
     }
 
     function handleMessage(_message, _sender, _sendResponse, _port) {
+        var tid = 0;
+        // no tab set if message is from pages/popup.html
+        if (_sender.tab) {
+            tid = _sender.tab.id;
+            if (!frames.hasOwnProperty(tid)) {
+                frames[tid] = {index: 0, list: []};
+            }
+            if (_message.windowId && frames[tid].list.indexOf(_message.windowId) === -1) {
+                frames[tid].list.push(_message.windowId);
+            }
+        }
         if (_message && _message.target !== 'content_runtime') {
             if (self.hasOwnProperty(_message.action)) {
                 if (_message.repeats > settings.repeatThreshold) {
@@ -111,18 +122,18 @@ var Service = (function() {
                 self[_message.action](_message, _sender, _sendResponse);
             } else if (_message.toFrontend) {
                 try {
-                    frontEndPorts[_sender.tab.id].postMessage(_message);
-                    contentPorts[_sender.tab.id] = _port;
+                    frontEndPorts[tid].postMessage(_message);
+                    contentPorts[tid] = _port;
                     if (_message.ack) {
                         onResponseById[_message.id] = _sendResponse;
                     }
                 } catch (e) {
-                    chrome.tabs.executeScript(_sender.tab.id, {
+                    chrome.tabs.executeScript(tid, {
                         code: "createFrontEnd()"
                     });
                 }
             } else if (_message.toContent) {
-                contentPorts[_sender.tab.id].postMessage(_message);
+                contentPorts[tid].postMessage(_message);
                 if (_message.ack) {
                     onResponseById[_message.id] = _sendResponse;
                 }
@@ -137,14 +148,19 @@ var Service = (function() {
         }
     }
 
-    function triggerEvent(obj, evt) {
-        var event = document.createEvent("HTMLEvents");
-        event.initEvent(evt, true, true);
-        event.eventName = evt;
-        obj.dispatchEvent(event);
-    }
-
     function loadSettings(keys, cb) {
+        // temp wrapper to load snippets from localPath
+        var _cb = function(set) {
+            if (set.localPath) {
+                var s = request(set.localPath);
+                s.then(function(resp) {
+                    set.snippets = resp;
+                    cb(set);
+                });
+            } else {
+                cb(set);
+            }
+        };
         chrome.storage.local.get(null, function(localSet) {
             var localSavedAt = localSet.savedAt || 0;
             chrome.storage.sync.get(null, function(syncSet) {
@@ -156,15 +172,15 @@ var Service = (function() {
                         if (chrome.runtime.lastError) {
                             subset.error = chrome.runtime.lastError.message;
                         }
-                        cb(subset);
+                        _cb(subset);
                     });
                 } else if (localSavedAt < syncSavedAt) {
                     extendObject(settings, syncSet);
-                    cb(getSubSettings(keys));
+                    _cb(getSubSettings(keys));
                     chrome.storage.local.set(syncSet);
                 } else {
                     extendObject(settings, localSet);
-                    cb(getSubSettings(keys));
+                    _cb(getSubSettings(keys));
                 }
             });
         });
@@ -227,7 +243,7 @@ var Service = (function() {
         delete tabMessages[tabId];
         delete tabURLs[tabId];
         delete tabErrors[tabId];
-        delete frameIncs[tabId];
+        delete frames[tabId];
         tabHistory = tabHistory.filter(function(e) {
             return e !== tabId;
         });
@@ -250,7 +266,7 @@ var Service = (function() {
     }
     chrome.tabs.onUpdated.addListener(function(tabId, changeInfo, tab) {
         if (changeInfo.status === "loading") {
-            delete frameIncs[tabId];
+            delete frames[tabId];
         }
         _setScrollPos_bg(tabId);
     });
@@ -531,7 +547,11 @@ var Service = (function() {
     };
     self.closeTab = function(message, sender, sendResponse) {
         _roundRepeatTabs(sender.tab, message.repeats, function(tabIds) {
-            chrome.tabs.remove(tabIds);
+            chrome.tabs.remove(tabIds, function() {
+                if ( settings.focusAfterClosed === "left" ) {
+                    _nextTab(sender.tab, -1);
+                }
+            });
         });
     };
     self.muteTab = function(message, sender, sendResponse) {
@@ -696,21 +716,17 @@ var Service = (function() {
     };
     self.nextFrame = function(message, sender, sendResponse) {
         var tid = sender.tab.id;
-        chrome.tabs.executeScript(tid, {
-            code: "_prepareFrames()"
-        }, function(results) {
-            var frames = results[0];
-            if (!frameIncs.hasOwnProperty(tid)) {
-                frameIncs[tid] = 0;
-            }
-            frameIncs[tid]++;
-            frameIncs[tid] = frameIncs[tid] % frames.length;
+        if (frames.hasOwnProperty(tid)) {
+            var framesInTab = frames[tid];
+            framesInTab.index ++;
+            framesInTab.index = framesInTab.index % framesInTab.list.length;
+
             chrome.tabs.sendMessage(tid, {
                 subject: "focusFrame",
                 target: 'content_runtime',
-                frameId: frames[frameIncs[tid]]
+                frameId: framesInTab.list[framesInTab.index]
             });
-        });
+        }
     };
     self.moveTab = function(message, sender, sendResponse) {
         chrome.tabs.query({
