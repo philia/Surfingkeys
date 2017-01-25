@@ -35,6 +35,12 @@ var Front = (function() {
         });
     };
 
+    self.showPressed = function(content) {
+        frontendCommand({
+            action: 'showPressed'
+        });
+    };
+
     var onEditorSaved, elementBehindEditor;
     self.showEditor = function(element, onWrite, type) {
         var content, initial_line = 0;
@@ -137,6 +143,7 @@ var Front = (function() {
         }, function(response) {
             // get focus back from frontend for this action, as focus is stolen by the clipboard_holder.
             window.focus();
+            Front.showBanner("Copied: " + text);
         });
     };
 
@@ -149,7 +156,7 @@ var Front = (function() {
     self.showKeystroke = function(key) {
         frontendCommand({
             action: 'showKeystroke',
-            key: key
+            key: decodeKeystroke(key)
         });
     };
 

@@ -85,13 +85,10 @@ function _parseAnnotation(ag) {
     return ag;
 }
 
-function createKeyTarget(code, ag, extra_chars, repeatIgnore) {
+function createKeyTarget(code, ag, repeatIgnore) {
     var keybound = {
         code: code
     };
-    if (extra_chars) {
-        keybound.extra_chars = extra_chars;
-    }
     if (repeatIgnore) {
         keybound.repeatIgnore = repeatIgnore;
     }
@@ -113,7 +110,7 @@ function _mapkey(mode, keys, annotation, jscode, options) {
         }
         // to save memory, we keep annotations only in frontend.html, where they are used to create usage message.
         var ag = (!Front.isProvider()) ? null : {annotation: annotation, feature_group: ((mode === Visual) ? 9 :14)};
-        var keybound = createKeyTarget(jscode, ag, options.extra_chars, options.repeatIgnore);
+        var keybound = createKeyTarget(jscode, ag, options.repeatIgnore);
         mode.mappings.add(keys, keybound);
     }
 }
@@ -141,7 +138,7 @@ function map(new_keystroke, old_keystroke, domain, new_annotation) {
                 var ag = (!Front.isProvider()) ? null : {annotation: new_annotation || meta.annotation, feature_group: meta.feature_group};
                 var keybound = createKeyTarget(function() {
                     meta.code.call(meta.code, args);
-                }, ag, meta.extra_chars, meta.repeatIgnore);
+                }, ag, meta.repeatIgnore);
                 Normal.mappings.add(encodeKeystroke(new_keystroke), keybound);
             }
         } else {
@@ -187,7 +184,9 @@ function imap(new_keystroke, old_keystroke, domain, new_annotation) {
         if (old_map) {
             var nks = encodeKeystroke(new_keystroke);
             Insert.mappings.remove(nks);
-            Insert.mappings.add(nks, old_map.meta);
+            // meta.word need to be new
+            var meta = $.extend({}, old_map.meta);
+            Insert.mappings.add(nks, meta);
         }
     }
 }
@@ -196,6 +195,11 @@ function iunmap(keystroke, domain) {
     if (!domain || domain.test(window.location.origin)) {
         Insert.mappings.remove(encodeKeystroke(keystroke));
     }
+}
+
+AceVimMappings = [];
+function aceVimMap(lhs, rhs, ctx) {
+    AceVimMappings.push(arguments);
 }
 
 function addSearchAliasX(alias, prompt, search_url, search_leader_key, suggestion_url, callback_to_parse_suggestion, only_this_site_key) {
@@ -283,7 +287,7 @@ function searchSelectedWith(se, onlyThisSite, interactive, alias) {
         if (interactive) {
             Front.openOmnibar({type: "SearchEngine", extra: alias, pref: query});
         } else {
-            tabOpenLink(se + encodeURI(query));
+            tabOpenLink(se + encodeURIComponent(query));
         }
     });
 }
@@ -404,27 +408,29 @@ function applySettings(rs) {
 runtime.on('settingsUpdated', function(response) {
     var rs = response.settings;
     applySettings(rs);
-    var disabled = checkBlackList(runtime.conf);
-    if (rs.hasOwnProperty('blacklist') || rs.hasOwnProperty('blacklistPattern')) {
+    if (rs.hasOwnProperty('blacklist') || runtime.conf.blacklistPattern) {
+        var disabled = checkBlackList(rs);
         // only toggle Disabled mode when blacklist is updated
         if (disabled) {
             Disabled.enter();
         } else {
             Disabled.exit();
         }
-    }
 
-    if (window === top) {
-        runtime.command({
-            action: 'setSurfingkeysIcon',
-            status: disabled
-        });
+        if (window === top) {
+            runtime.command({
+                action: 'setSurfingkeysIcon',
+                status: disabled
+            });
+        }
     }
 });
 
 function checkBlackList(sb) {
-    return sb.blacklist[window.location.origin] || sb.blacklist['.*']
-        || (sb.blacklistPattern && typeof(sb.blacklistPattern.test) === "function" && sb.blacklistPattern.test(window.location.href));
+    return chrome.extension.getURL('').indexOf(window.location.origin) !== 0 && (
+        sb.blacklist[window.location.origin] || sb.blacklist['.*']
+        || (runtime.conf.blacklistPattern && typeof(runtime.conf.blacklistPattern.test) === "function" && runtime.conf.blacklistPattern.test(window.location.href))
+    );
 }
 
 runtime.command({
@@ -436,7 +442,7 @@ runtime.command({
 
     Normal.enter();
 
-    var disabled = checkBlackList(runtime.conf);
+    var disabled = checkBlackList(rs);
     if (disabled) {
         Disabled.enter();
     } else {

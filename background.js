@@ -17,31 +17,19 @@ var Service = (function() {
         tabErrors = {};
 
     var settings = {
-        useLocalMarkdownAPI: true,                         // use local js to parse markdown own, or use github markdown API
-        focusOnSaved: true,
-        omnibarMaxResults: 20,
-        tabsThreshold: 9,
-        hintsThreshold: 10000,
         repeatThreshold: 99,
         tabsMRUOrder: true,
-        smoothScroll: true,
         blacklist: {},
         marks: {},
-        userData: {},
         findHistory: [],
         cmdHistory: [],
         snippets: "",
         sessions: {},
         newTabPosition: 'right',
-        afterYank: 1,
         autoproxy_hosts: {},
         proxyMode: 'clear',
         proxy: "DIRECT",
-        interceptedErrors: {},
-        pushStateIgnored: {
-            'https://inbox.google.com': 1,
-            'https://vk.com': 1
-        }
+        interceptedErrors: {}
     };
     var newTabUrl = "chrome://newtab/";
 
@@ -167,7 +155,7 @@ var Service = (function() {
                 var syncSavedAt = syncSet.savedAt || 0;
                 if (localSavedAt > syncSavedAt) {
                     extendObject(settings, localSet);
-                    chrome.storage.sync.set(localSet, function() {
+                    _syncSave(localSet, function() {
                         var subset = getSubSettings(keys);
                         if (chrome.runtime.lastError) {
                             subset.error = chrome.runtime.lastError.message;
@@ -324,6 +312,13 @@ var Service = (function() {
     };
 
 
+    function _syncSave(data, cb) {
+        if (data.hasOwnProperty('localPath') && data.hasOwnProperty('snippets')) {
+            delete data.snippets;
+        }
+        chrome.storage.sync.set(data, cb);
+    }
+
     function _updateSettings(diffSettings, afterSet) {
         extendObject(settings, diffSettings);
         diffSettings.savedAt = new Date().getTime();
@@ -332,7 +327,7 @@ var Service = (function() {
                 afterSet();
             }
         });
-        chrome.storage.sync.set(diffSettings, function() {
+        _syncSave(diffSettings, function() {
             if (chrome.runtime.lastError) {
                 var error = chrome.runtime.lastError.message;
             }
@@ -938,34 +933,39 @@ var Service = (function() {
             });
         }
     };
-    self.removeURL = function(message, sender, sendResponse) {
-        var type = message.uid[0], uid = message.uid.substr(1);
+    function _removeURL(uid, cb) {
+        var type = uid[0], uid = uid.substr(1);
         if (type === 'B') {
-            chrome.bookmarks.remove(uid, function() {
-                _response(message, sendResponse, {
-                    response: "Done"
-                });
-            });
+            chrome.bookmarks.remove(uid, cb);
         } else if (type === 'H') {
-            chrome.history.deleteUrl({url: uid}, function () {
-                _response(message, sendResponse, {
-                    response: "Done"
-                });
-            });
+            chrome.history.deleteUrl({url: uid}, cb);
         } else if (type === 'T') {
-            chrome.tabs.remove(parseInt(uid), function() {
-                _response(message, sendResponse, {
-                    response: "Done"
-                });
-            });
+            chrome.tabs.remove(parseInt(uid), cb);
         } else if (type === 'M') {
             delete settings.marks[uid];
-            _updateAndPostSettings({marks: settings.marks}, function() {
+            _updateAndPostSettings({marks: settings.marks}, cb);
+        }
+    }
+    self.removeURL = function(message, sender, sendResponse) {
+        var removed = 0,
+            totalToRemoved = message.uid.length,
+            uid = message.uid;
+        if (typeof(message.uid) === "string") {
+            totalToRemoved = 1;
+            uid = [ message.uid ];
+        }
+        function _done() {
+            removed ++;
+            if (removed === totalToRemoved) {
                 _response(message, sendResponse, {
                     response: "Done"
                 });
-            });
+            }
         }
+        uid.forEach(function(u) {
+            _removeURL(u, _done);
+        });
+
     };
     self.localData = function(message, sender, sendResponse) {
         if (message.data.constructor === Object) {
@@ -990,6 +990,25 @@ var Service = (function() {
                 });
             });
         }
+    };
+    self.captureVisibleTab = function(message, sender, sendResponse) {
+        chrome.tabs.captureVisibleTab(null, {format: "png"}, function(dataUrl) {
+            _response(message, sendResponse, {
+                dataUrl: dataUrl
+            });
+        });
+    };
+    self.getCaptureSize = function(message, sender, sendResponse) {
+        var img = document.createElement( "img" );
+        img.onload = function() {
+            _response(message, sendResponse, {
+                width: img.width,
+                height: img.height
+            });
+        };
+        chrome.tabs.captureVisibleTab(null, {format: "png"}, function(dataUrl) {
+            img.src = dataUrl;
+        });
     };
 
     var _queueURLs = [];

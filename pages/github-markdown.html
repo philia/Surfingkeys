@@ -5,6 +5,7 @@
         <meta charset="UTF-8">
         <title>Markdown preview</title>
         <link rel="stylesheet" href="../content_scripts/content_scripts.css">
+        <link rel="stylesheet" href="common.css">
         <link rel="stylesheet" href="github-markdown.css">
     </head>
     <body>
@@ -25,8 +26,17 @@
 
         <script src="../libs/marked.min.js"></script>
         <script src="github-markdown.js"></script>
-        <div class="markdown-body">
-            Loading ...
+        <div class="description">
+            <h3>Preview your markdown snippets in clipboard</h3>
+            <ul>
+                <li><kbd>r</kbd> to refresh this page to reload markdown from clipboard.</li>
+                <li><kbd>i</kbd> or <kbd>sm</kbd> to open vim editor to edit markdown.</li>
+            </ul>
+        </div>
+        <div class="content">
+            <div class="markdown-body">
+                Loading ...
+            </div>
         </div>
     </body>
 </html>

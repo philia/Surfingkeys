@@ -20,7 +20,7 @@
 //
 // ************************* WARNING *************************
 
-imapkey("<Ctrl-'>", '', function() {
+imapkey("<Ctrl-'>", '#15Toggle quotes in an input element', function() {
     var val = document.activeElement.value;
     if (val[0] === '"') {
         document.activeElement.value = val.substr(1, val.length - 2);
@@ -152,8 +152,10 @@ command('quit', '#5quit chrome', function() {
 });
 map('ZQ', ':quit');
 mapkey(".", '#0Repeat last action', Normal.repeatLast, {repeatIgnore: true});
-mapkey("<Ctrl-2>", '#0Show last action', function() {
-    Front.showPopup(htmlEncode(runtime.conf.lastKeys.join('\n')));
+mapkey("sql", '#0Show last action', function() {
+    Front.showPopup(htmlEncode(runtime.conf.lastKeys.map(function(k) {
+        return decodeKeystroke(k);
+    }).join(' → ')));
 }, {repeatIgnore: true});
 mapkey('ZZ', '#5Save session and quit', function() {
     RUNTIME('createSession', {
@@ -226,8 +228,18 @@ mapkey('Q', '#8Open omnibar for word translation', function() {
         query: Visual.getWordUnderCursor(),
         style: "opacity: 0.8;",
         parseResult: function(res) {
-            var res = eval("a=" + res.text);
-            return [res.data.definition || res.msg];
+            var res = JSON.parse(res.text);
+            if (res.data.definition) {
+                var tmp = [];
+                for (var reg in res.data.pronunciations) {
+                    tmp.push('[{0}] {1}'.format(reg, res.data.pronunciations[reg]));
+                    tmp.push('<audio src="{0}" controls></audio>'.format(res.data[reg+'_audio']));
+                }
+                tmp.push(res.data.definition);
+                return [ '<pre>{0}</pre>'.format(tmp.join('\n')) ];
+            } else {
+                return [ res.msg ];
+            }
         }
     });
 });
@@ -293,11 +305,14 @@ vmapkey('<Ctrl-d>', '#9Forward 20 lines', function() {
 });
 mapkey('x', '#3Close current tab', 'RUNTIME("closeTab")');
 mapkey('X', '#3Restore closed tab', 'RUNTIME("openLast")');
-mapkey('<Ctrl-1>', '#0show pressed key', function(key) {
-    Front.showPopup(htmlEncode(decodeKeystroke(key)));
-}, {extra_chars: 1});
-mapkey('m', '#10Add current URL to vim-like marks', Normal.addVIMark, {extra_chars: 1});
-mapkey("'", '#10Jump to vim-like mark', Normal.jumpVIMark, {extra_chars: 1});
+mapkey('spk', '#0show pressed key', function() {
+    Front.showPressed();
+});
+mapkey('m', '#10Add current URL to vim-like marks', Normal.addVIMark);
+mapkey("'", '#10Jump to vim-like mark', Normal.jumpVIMark);
+mapkey("<Ctrl-'>", '#10Jump to vim-like mark in new tab.', function(mark) {
+    Normal.jumpVIMark(mark, true);
+});
 mapkey('<<', '#3Move current tab to left', function() {
     RUNTIME('moveTab', {
         step: -1
@@ -321,7 +336,7 @@ mapkey('cc', '#7Open selected link or link from clipboard', function() {
     }
 });
 mapkey('[[', '#1Click on the previous link on current page', function() {
-    var prevLinks = $('a').regex(/((<<|prev(ious)?)+)/i);
+    var prevLinks = $('a').regex(runtime.conf.prevLinkRegex);
     if (prevLinks.length) {
         clickOn(prevLinks);
     } else {
@@ -329,7 +344,7 @@ mapkey('[[', '#1Click on the previous link on current page', function() {
     }
 });
 mapkey(']]', '#1Click on the next link on current page', function() {
-    var nextLinks = $('a').regex(/((>>|next)+)/i);
+    var nextLinks = $('a').regex(runtime.conf.nextLinkRegex);
     if (nextLinks.length) {
         clickOn(nextLinks);
     } else {
@@ -370,6 +385,21 @@ mapkey('yf', '#7Copy form data in JSON on current page', function() {
     });
     Front.writeClipboard(JSON.stringify(aa, null, 4));
 });
+mapkey('yg', '#7Capture current page', function() {
+    setTimeout(function() {
+        runtime.command({
+            action: 'captureVisibleTab'
+        }, function(response) {
+            Front.showPopup("<img src='{0}' />".format(response.dataUrl));
+        });
+    }, 500);
+});
+mapkey('yG', '#7Capture current full page', function() {
+    Normal.captureFullPage();
+});
+mapkey('yS', '#7Capture scrolling element', function() {
+    Normal.captureScrollingElement();
+});
 mapkey('yp', '#7Copy form data for POST on current page', function() {
     var aa = [];
     $('form').each(function() {
@@ -408,6 +438,7 @@ mapkey('se', '#11Edit Settings', 'tabOpenLink("/pages/options.html")');
 mapkey('sr', '#11Reset Settings', 'Normal.resetSettings()');
 mapkey('si', '#12Open Chrome Inspect', 'tabOpenLink("chrome://inspect/#devices")');
 mapkey('sm', '#11Preview markdown', 'tabOpenLink("/pages/github-markdown.html")');
+mapkey('<Ctrl-Alt-d>', '#11Mermaid diagram generator', 'tabOpenLink("/pages/mermaid.html")');
 mapkey('su', '#4Edit current URL with vim editor', function() {
     Front.showEditor(window.location.href, function(data) {
         tabOpenLink(data);

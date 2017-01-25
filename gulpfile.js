@@ -3,6 +3,7 @@ var gulp = require('gulp'),
     gp_concat = require('gulp-concat'),
     clean = require('gulp-clean'),
     zip = require('gulp-zip'),
+    gulpUtil = require('gulp-util'),
     gp_uglify = require('gulp-uglify');
 
 gulp.task('clean', function () {
@@ -31,7 +32,7 @@ gulp.task('build_common_content_min', ['clean'], function() {
         "content_scripts/hints.js",
     ])
     .pipe(gp_concat('common_content.min.js'))
-    .pipe(gp_uglify())
+    .pipe(gp_uglify().on('error', gulpUtil.log))
     .pipe(gulp.dest('dist/content_scripts'));
 });
 
@@ -41,14 +42,15 @@ gulp.task('use_common_content_min', ['copy-non-js-files', 'clean'], function() {
         'pages/error.html',
         'pages/options.html',
         'pages/popup.html',
+        'pages/mermaid.html',
         'pages/github-markdown.html'
     ], {base: "."})
         .pipe(replace(/.*build:common_content[^]*endbuild.*/, '        <script src="../content_scripts/common_content.min.js"></script>'))
-        .pipe(replace('sha256-nWgGskPWTedp2TpUOZNWBmUL17nlwxaRUKiNdVES5rE=', 'sha256-IebAMk2eD4hvrQxBXSL/Slr2yKk2ZEnE+rt1eOUvNQc='))
+        .pipe(replace('sha256-nWgGskPWTedp2TpUOZNWBmUL17nlwxaRUKiNdVES5rE=', 'sha256-bLsrv4TA/Xi78m0xfsiASI08PiECkDGvattg7W+fQgc='))
         .pipe(gulp.dest('dist'));
     gulp.src('manifest.json')
         .pipe(replace(/.*build:common_content[^]*endbuild.*/, '            "content_scripts/common_content.min.js",'))
-        .pipe(replace('sha256-nWgGskPWTedp2TpUOZNWBmUL17nlwxaRUKiNdVES5rE=', 'sha256-IebAMk2eD4hvrQxBXSL/Slr2yKk2ZEnE+rt1eOUvNQc='))
+        .pipe(replace('sha256-nWgGskPWTedp2TpUOZNWBmUL17nlwxaRUKiNdVES5rE=', 'sha256-bLsrv4TA/Xi78m0xfsiASI08PiECkDGvattg7W+fQgc='))
         .pipe(gulp.dest('dist'));
 });
 
@@ -60,9 +62,11 @@ gulp.task('copy-js-files', ['clean'], function() {
         'content_scripts/top.js',
         'libs/ace/*.js',
         'libs/marked.min.js',
+        'libs/mermaid.min.js',
+        'libs/webfontloader.js',
         'pages/*.js'
     ], {base: "."})
-    .pipe(gp_uglify())
+    .pipe(gp_uglify().on('error', gulpUtil.log))
     .pipe(gulp.dest('dist'));
 });
 

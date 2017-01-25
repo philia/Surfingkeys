@@ -145,6 +145,9 @@ body {
     z-index: 2147483298;
     padding: 1rem;
 }
+#sk_popup img {
+    width: 100%;
+}
 #sk_usage>div {
     display: inline-block;
     vertical-align: top;
@@ -168,7 +171,7 @@ body {
 #sk_usage * {
     font-size: 10pt;
 }
-#sk_usage kbd {
+kbd {
     white-space: nowrap;
     display: inline-block;
     padding: 3px 5px;
@@ -179,6 +182,14 @@ body {
     border-bottom-color: #bbb;
     border-radius: 3px;
     box-shadow: inset 0 -1px 0 #bbb;
+}
+div.pressedKey {
+    text-align: center;
+    padding: 50px;
+}
+div.pressedKey kbd {
+    font-size: 24pt;
+    padding: 16px;
 }
 #sk_frame {
     position: absolute;
@@ -207,6 +218,9 @@ body {
     border-top-style: none;
     text-align: center;
     background: rgb(255, 233, 182);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
 }
 div.sk_tabs {
     position: fixed;

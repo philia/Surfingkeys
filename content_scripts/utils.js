@@ -21,6 +21,13 @@ function isEditable(element) {
         || element.isContentEditable
         || (element.localName === 'input' && /^(?!button|checkbox|file|hidden|image|radio|reset|submit)/i.test(element.type));
 }
+function reportIssue(title, description) {
+    title = encodeURIComponent(title);
+    description = "%23%23+Error+details%0A%0A{0}%0A%0ASurfingKeys%3A+{1}%0A%0AChrome%3A+{2}%0A%0A%23%23+Context%0A%0A%2A%2APlease+replace+this+with+a+description+of+how+you+were+using+SurfingKeys.%2A%2A".format(encodeURIComponent(description), chrome.runtime.getManifest().version, encodeURIComponent(navigator.userAgent));
+    var error = '<h2>Uh-oh! The SurfingKeys extension encountered a bug.</h2> <p>Please click <a href="https://github.com/brookhong/Surfingkeys/issues/new?title={0}&body={1}" target=_blank>here</a> to start filing a new issue, append a description of how you were using SurfingKeys before this message appeared, then submit it.  Thanks for your help!</p>'.format(title, description);
+
+    Front.showPopup(error);
+}
 
 String.prototype.format = function() {
     var formatted = this;
@@ -53,6 +60,18 @@ String.prototype.format = function() {
     var KeyboardUtils, root;
 
     KeyboardUtils = {
+        keyCodesMac: {
+            Minus: ["-", "_"],
+            Equal: ["=", "+"],
+            BracketLeft: ["[", "{"],
+            BracketRight: ["]", "}"],
+            Backslash: ["\\", "|"],
+            Semicolon: [";", ":"],
+            Quote: ["'", "\""],
+            Comma: [",", "<"],
+            Period: [".", ">"],
+            Slash: ["/", "?"]
+        },
         keyCodes: {
             ESC: 27,
             backspace: 8,
@@ -73,7 +92,10 @@ String.prototype.format = function() {
             16: "Shift",
             17: "Ctrl",
             18: "Alt",
-            91: "Meta"
+            91: "Meta",
+            92: "Meta",
+            93: "ContextMenu",
+            229: "Process"
         },
         keyNames: {
             8:   'Backspace',
@@ -139,12 +161,24 @@ String.prototype.format = function() {
                             character = event.shiftKey ? character : character.toLowerCase();
                         }
                     } else {
-                        // Alt-s is ß under Mac
-                        if (character.charCodeAt(0) > 127 && event.keyCode < 127) {
-                            character = String.fromCharCode(event.keyCode);
-                            character = event.shiftKey ? character : character.toLowerCase();
+                        if (character.charCodeAt(0) > 127   // Alt-s is ß under Mac
+                            || character === "Dead"         // Alt-i is Dead under Mac
+                        ) {
+                            if (event.keyCode < 127) {
+                                character = String.fromCharCode(event.keyCode);
+                                character = event.shiftKey ? character : character.toLowerCase();
+                            } else if (this.keyCodesMac.hasOwnProperty(event.code)) {
+                                // Alt-/ or Alt-?
+                                character = this.keyCodesMac[event.code][event.shiftKey ? 1 : 0];
+                            }
+                        } else if (character === "Unidentified") {
+                            // for IME on
+                            character = "";
                         }
                     }
+                }
+                if (event.shiftKey && character.length > 1) {
+                    character = "Shift-" + character;
                 }
                 if (event.metaKey) {
                     character = "Meta-" + character;
@@ -159,7 +193,10 @@ String.prototype.format = function() {
                     character = "<{0}>".format(character);
                 }
             }
-            return encodeKeystroke(character);
+            if (decodeKeystroke(encodeKeystroke(character)) === character) {
+                character = encodeKeystroke(character);
+            }
+            return character;
         },
         isWordChar: function(event) {
             return (event.keyCode < 123 && event.keyCode >= 97 || event.keyCode < 91 && event.keyCode >= 65 || event.keyCode < 58 && event.keyCode >= 48);
@@ -184,7 +221,7 @@ String.prototype.format = function() {
 // <Ctrl-Alt-z>: ⪊: <Ctrl-Alt-z>
 // <Ctrl-Alt-Meta-h>: ⹸: <Ctrl-Alt-Meta-h>
 function encodeKeystroke(s) {
-    var code = s, groups = s.match(/<(?:Ctrl-)?(?:Alt-)?(?:Meta-)?(.+)>/);
+    var code = s, groups = s.match(/<(?:Ctrl-)?(?:Alt-)?(?:Meta-)?(?:Shift-)?(.+)>/);
     if (groups) {
         var mod = 0;
         if (s.indexOf("Ctrl-") !== -1) {
@@ -195,6 +232,9 @@ function encodeKeystroke(s) {
         }
         if (s.indexOf("Meta-") !== -1) {
             mod |= 4;
+        }
+        if (s.indexOf("Shift-") !== -1) {
+            mod |= 8;
         }
         if (groups[1].length > 1) {
             code = encodeKeystroke.specialKeys.indexOf(groups[1]);
@@ -207,7 +247,7 @@ function encodeKeystroke(s) {
     }
     return code;
 }
-encodeKeystroke.specialKeys = ['Esc', 'Space', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Backspace', 'Enter', 'Tab', 'Delete'];
+encodeKeystroke.specialKeys = ['Esc', 'Space', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Backspace', 'Enter', 'Tab', 'Delete', 'End', 'Home', 'Insert', 'NumLock', 'PageDown', 'PageUp', 'Pause', 'ScrollLock', 'CapsLock', 'PrintScreen', 'Escape'];
 
 function decodeKeystroke(s) {
     var r = s.charCodeAt(0);
@@ -220,6 +260,9 @@ function decodeKeystroke(s) {
             c = String.fromCharCode(r % 256);
         }
         r = r >> 8;
+        if (r & 8) {
+            c = "Shift-" + c;
+        }
         if (r & 4) {
             c = "Meta-" + c;
         }
@@ -242,7 +285,7 @@ function decodeKeystroke(s) {
 
 for ( var i = 0; i < encodeKeystroke.specialKeys.length; i++) {
     var c = encodeKeystroke.specialKeys[i];
-    ["","Ctrl-", ,"Alt-", ,"Meta-", ,"Ctrl-Alt-", ,"Ctrl-Meta-", ,"Alt-Meta-", ,"Ctrl-Alt-Meta-"].forEach(function(u) {
+    ["", "Ctrl-", "Alt-", "Shift-", "Meta-", "Ctrl-Alt-", "Ctrl-Shift-", "Ctrl-Meta-", "Alt-Shift-", "Alt-Meta-", "Alt-Meta-Shift-", "Meta-Shift-", "Ctrl-Alt-Shift-", "Ctrl-Alt-Meta-", "Ctrl-Meta-Shift-", "Ctrl-Alt-Meta-Shift-"].forEach(function(u) {
         var keystr = "<" + u + c + ">";
         var encoded = encodeKeystroke(keystr);
         var decoded = decodeKeystroke(encoded);
@@ -253,7 +296,7 @@ for ( var i = 0; i < encodeKeystroke.specialKeys.length; i++) {
 }
 for ( var i = 32; i < 256; i++) {
     var c = String.fromCharCode(i);
-    ["Ctrl-", ,"Alt-", ,"Meta-", ,"Ctrl-Alt-", ,"Ctrl-Meta-", ,"Alt-Meta-", ,"Ctrl-Alt-Meta-"].forEach(function(u) {
+    ["Ctrl-", "Alt-", "Meta-", "Ctrl-Alt-", "Ctrl-Meta-", "Alt-Meta-", "Ctrl-Alt-Meta-"].forEach(function(u) {
         var keystr = "<" + u + c + ">";
         var encoded = encodeKeystroke(keystr);
         var decoded = decodeKeystroke(encoded);

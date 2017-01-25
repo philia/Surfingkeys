@@ -12,12 +12,32 @@ var Front = (function(mode) {
     };
 
     self.addEventListener('keydown', function(event) {
-        var handled = "";
         if (Mode.isSpecialKeyOf("<Esc>", event.sk_keyName)) {
             self.hidePopup();
-            handled = "stopEventPropagation";
+            event.sk_stopPropagation = true;
         } else {
-            if (_tabs.trie) {
+            if (self.showPressed) {
+                if (event.sk_keyName.length > 1) {
+                    var keyStr = JSON.stringify({
+                        metaKey: event.metaKey,
+                        altKey: event.altKey,
+                        ctrlKey: event.ctrlKey,
+                        shiftKey: event.shiftKey,
+                        keyCode: event.keyCode,
+                        code: event.code,
+                        composed: event.composed,
+                        key: event.key
+                    }, null, 4);
+                    reportIssue("Unrecognized key event: {0}".format(event.sk_keyName), keyStr);
+                } else {
+                    var s = htmlEncode(decodeKeystroke(event.sk_keyName));
+                    if (!s) {
+                        s = "&nbsp;";
+                    }
+                    _popup.find("kbd").html(s);
+                }
+                event.sk_stopPropagation = true;
+            } else if (_tabs.trie) {
                 _tabs.trie = _tabs.trie.find(event.sk_keyName);
                 if (!_tabs.trie) {
                     self.hidePopup();
@@ -29,10 +49,9 @@ var Front = (function(mode) {
                     self.hidePopup();
                     _tabs.trie = null;
                 }
-                handled = "stopEventPropagation";
+                event.sk_stopPropagation = true;
             }
         }
-        return handled;
     });
 
     self.postMessage = function(to, message) {
@@ -48,6 +67,7 @@ var Front = (function(mode) {
         var height;
         if ($('body>div:visible').length > 0) {
             height = '100%';
+            pointerEvents = 'all';
         } else {
             height = '0px';
             // blur host anyway if height is 0px
@@ -91,6 +111,7 @@ var Front = (function(mode) {
             self.contentCommand({
                 action: 'getFocusFromFront'
             });
+            self.showPressed = false;
             self.exit();
         }
     };
@@ -180,10 +201,15 @@ var Front = (function(mode) {
             'Proxy',                 // 13
             'Misc',                  // 14
             'Insert Mode',           // 15
+            'Omnibar Mode',          // 16
         ];
         var holder = $('<div/>');
         var help_groups = feature_groups.map(function(){return [];});
-        [ Normal.mappings, Visual.mappings, Insert.mappings ].map(function(mappings) {
+        [ Normal.mappings,
+            Visual.mappings,
+            Insert.mappings,
+            Omnibar.mappings
+        ].map(function(mappings) {
             var words = mappings.getWords();
             for (var i = 0; i < words.length; i++) {
                 var w = words[i];
@@ -216,6 +242,10 @@ var Front = (function(mode) {
     };
     runtime.on('showPopup', function(message) {
         self.showPopup(message.content);
+    });
+    runtime.on('showPressed', function(message) {
+        self.showPressed = true;
+        self.showPopup("<h3>Please any key to check how to use it with SurfingKeys, Esc to quit.</h3><div class='pressedKey'><kbd>&nbsp;</kbd></div>");
     });
     _editor.onShow = function(message) {
         if (typeof(AceEditor) !== "undefined") {
@@ -253,9 +283,9 @@ var Front = (function(mode) {
     };
     runtime.on('openFinder', self.openFinder);
     self.showBanner = function(message, linger_time) {
-        banner.html(message).show();
-        self.flush();
         banner.finish();
+        banner.html(htmlEncode(message)).show();
+        self.flush();
         banner.animate({
             "top": "0"
         }, 300);
@@ -289,10 +319,10 @@ var Front = (function(mode) {
     });
     self.hideBubble = function() {
         _bubble.hide();
+        self.flush();
     };
     runtime.on('hideBubble', function(message) {
         self.hideBubble();
-        self.flush();
     });
 
     self.showStatus = function(pos, content, duration) {
@@ -353,7 +383,7 @@ var Front = (function(mode) {
         keystroke.show();
         self.flush();
         var keys = keystroke.html() + key;
-        keystroke.html(keys);
+        keystroke.html(htmlEncode(keys));
         if (keystroke.css('right') !== '0px') {
             keystroke.animate({
                 right: 0
@@ -402,11 +432,7 @@ window.addEventListener('message', function(event) {
 runtime.command({
     action: 'getSettings'
 }, function(response) {
-    var rs = response.settings;
-    runtime.conf.tabsThreshold = rs.tabsThreshold;
-    runtime.conf.omnibarMaxResults = rs.omnibarMaxResults;
-    applySettings(rs);
-
+    applySettings(response.settings);
 });
 
 $(document).on('surfingkeys:themeChanged', function(evt, theme) {
