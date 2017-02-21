@@ -51,7 +51,7 @@ var Mode = (function() {
         });
     }
 
-    self.enter = function(priority) {
+    self.enter = function(priority, reentrant) {
         // we need clear the modes stack first to make sure eventListeners of this mode added at first.
         popModes(mode_stack);
 
@@ -63,7 +63,7 @@ var Mode = (function() {
         if (pos === -1) {
             // push this mode into stack
             mode_stack.unshift(this);
-        } else if (pos > 0) {
+        } else if (pos > 0 && !reentrant) {
             // pop up all the modes over this
             // mode_stack = mode_stack.slice(pos);
             var modeList = Mode.stack().map(function(u) { return u.name; }).join(',');
@@ -79,6 +79,24 @@ var Mode = (function() {
             // return m.name;
         // }).join('->');
         // console.log('enter {0}, {1}'.format(this.name, modes));
+
+        self.showStatus();
+    };
+
+    self.showStatus = function() {
+        if (mode_stack.length && document.hasFocus()) {
+            var sl = mode_stack[0].statusLine;
+            if (sl === undefined) {
+                sl = mode_stack[0].name;
+            }
+            if (window !== top) {
+                var pathname = window.location.pathname.split('/');
+                if (pathname.length) {
+                    sl += " - frame: " + pathname[pathname.length - 1]
+                }
+            }
+            Front.showStatus(0, sl);
+        }
     };
 
     self.exit = function(peek) {
@@ -102,6 +120,7 @@ var Mode = (function() {
             // }).join('->');
             // console.log('exit {0}, {1}'.format(this.name, modes));
         }
+        self.showStatus();
     };
 
     self.stack = function() {
@@ -131,7 +150,11 @@ var Disabled = (function(mode) {
 })(Mode);
 
 var PassThrough = (function(mode) {
-    var self = $.extend({name: "PassThrough", eventListeners: {}}, mode);
+    var self = $.extend({
+        name: "PassThrough",
+        statusLine: "",
+        eventListeners: {}
+    }, mode);
 
     self.addEventListener('keydown', function(event) {
         // prevent this event to be handled by Surfingkeys' other listeners
@@ -361,18 +384,17 @@ var Normal = (function(mode) {
         self.scrollOptions[5] = false;
     });
     self.addEventListener('keyup', function(event) {
-        self.scrollOptions[5] = false;
-        if (self.stopKeyupPropagation) {
-            event.stopImmediatePropagation();
-            self.stopKeyupPropagation = false;
-        }
+        setTimeout(function() {
+            self.scrollOptions[5] = false;
+            if (self.stopKeyupPropagation) {
+                event.stopImmediatePropagation();
+                self.stopKeyupPropagation = false;
+            }
+        }, 0);
     });
     self.addEventListener('pushState', function(event) {
-        if ((typeof(TopHook) === "undefined" || Mode.stack()[0] !== TopHook)) {
-            // only for that we are not having TopHook mode.
-            Insert.exit();
-            GetBackFocus.enter();
-        }
+        Insert.exit();
+        GetBackFocus.enter(0, true);
     });
     self.addEventListener('mousedown', function(event) {
         if (isEditable(event.target)) {
@@ -483,15 +505,25 @@ var Normal = (function(mode) {
     function initScrollIndex() {
         if (!scrollNodes || scrollNodes.length === 0) {
             scrollNodes = getScrollableElements(100, 1.1);
-            scrollIndex = 0;
-            var maxHeight = 0;
-            scrollNodes.forEach(function(n, i) {
-                var h = n.getBoundingClientRect().height;
-                if (h > maxHeight) {
-                    scrollIndex = i;
-                    maxHeight = h
+            while (scrollNodes.length) {
+                var maxHeight = 0;
+                scrollIndex = 0;
+                scrollNodes.forEach(function(n, i) {
+                    var h = n.getBoundingClientRect().height;
+                    if (h > maxHeight) {
+                        scrollIndex = i;
+                        maxHeight = h
+                    }
+                });
+                var sn = scrollNodes[scrollIndex];
+                sn.scrollIntoViewIfNeeded();
+                if (isElementPartiallyInViewport(sn)) {
+                    break;
+                } else {
+                    // remove the node that could not be scrolled into view.
+                    scrollNodes.splice(scrollIndex, 1);
                 }
-            });
+            }
         }
     }
 
@@ -515,6 +547,13 @@ var Normal = (function(mode) {
             scrollIndex = (scrollIndex + 1) % scrollNodes.length;
             var sn = scrollNodes[scrollIndex];
             sn.scrollIntoViewIfNeeded();
+            while (!isElementPartiallyInViewport(sn) && scrollNodes.length) {
+                // remove the node that could not be scrolled into view.
+                scrollNodes.splice(scrollIndex, 1);
+                scrollIndex = scrollIndex % scrollNodes.length;
+                sn = scrollNodes[scrollIndex];
+                sn.scrollIntoViewIfNeeded();
+            }
             var rc = sn.getBoundingClientRect();
             Front.highlightElement({
                 duration: 200,
@@ -753,11 +792,6 @@ var Normal = (function(mode) {
                 }
             });
         }
-    };
-
-    self.resetSettings = function() {
-        RUNTIME("resetSettings");
-        Front.showBanner("Settings reset.");
     };
 
     self.insertJS = function(code, onload) {

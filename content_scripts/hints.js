@@ -48,7 +48,9 @@ var Hints = (function(mode) {
         holder = $('<div id=sk_hints/>');
     self.characters = 'asdfgqwertzxcvb';
     self.scrollKeys = '0jkhlG$';
-    var _lastCreateAttrs = {};
+    var _lastCreateAttrs = {},
+        _onHintKey = self.dispatchMouseClick,
+        _cssSelector = "";
 
     function getZIndex(node) {
         var z = 0;
@@ -64,18 +66,13 @@ var Hints = (function(mode) {
         var matches = refresh();
         if (matches.length === 1) {
             Normal.appendKeysForRepeat("Hints", prefix);
-            var onhint = $(matches[0]).data('onhint');
             var link = $(matches[0]).data('link');
-            if (onhint) {
-                onhint.call(window, link, event);
-                if (behaviours.multipleHits) {
-                    prefix = "";
-                    refresh();
-                } else {
-                    hide();
-                }
+            _onHintKey(link, event);
+            if (behaviours.multipleHits) {
+                prefix = "";
+                refresh();
             } else {
-                self.dispatchMouseClick(link, event);
+                hide();
             }
         } else if (matches.length === 0) {
             hide();
@@ -90,16 +87,6 @@ var Hints = (function(mode) {
             element.dispatchEvent(event);
         });
         lastMouseTarget = element;
-    }
-
-    function isElementPartiallyInViewport(el) {
-        var rect = el.getBoundingClientRect();
-        var windowHeight = (window.innerHeight || document.documentElement.clientHeight);
-        var windowWidth = (window.innerWidth || document.documentElement.clientWidth);
-
-        return rect.width && rect.height
-            && (rect.top <= windowHeight) && ((rect.top + rect.height) >= 0)
-            && (rect.left <= windowWidth) && ((rect.left + rect.width) >= 0)
     }
 
     function refresh() {
@@ -152,7 +139,7 @@ var Hints = (function(mode) {
     }
 
     function onScrollDone(evt) {
-        createHints("", Hints.dispatchMouseClick, _lastCreateAttrs);
+        createHints(_cssSelector, _lastCreateAttrs);
     }
 
     self.enter = function() {
@@ -202,7 +189,53 @@ var Hints = (function(mode) {
         return ordinate;
     };
 
-    function createHints(cssSelector, onHintKey, attrs) {
+    function placeHints(elements) {
+        holder.removeClass("hintsForTextNode");
+        holder.show().html('');
+        var hintLabels = self.genLabels(elements.length);
+        var bof = self.coordinate();
+        style.appendTo(holder);
+        elements.each(function(i) {
+            var pos = $(this).offset(),
+                z = getZIndex(this);
+            if (pos.top === 0 && pos.left === 0) {
+                // work around for svg elements, https://github.com/jquery/jquery/issues/3182
+                pos = this.getBoundingClientRect();
+            }
+            var left;
+            if (runtime.conf.hintAlign === "right") {
+                left = pos.left - bof.left + $(this).width();
+            } else if (runtime.conf.hintAlign === "left") {
+                left = pos.left - bof.left;
+            } else {
+                left = pos.left - bof.left + $(this).width() / 2;
+            }
+            left = Math.max(left, 0);
+            var link = $('<div/>').css('top', Math.max(pos.top - bof.top, 0)).css('left', left)
+                .css('z-index', z + 9999)
+                .data('z-index', z + 9999)
+                .data('label', hintLabels[i])
+                .data('link', this)
+                .html(hintLabels[i]);
+            holder.append(link);
+        });
+        var hints = holder.find('>div');
+        var bcr = hints[0].getBoundingClientRect();
+        for (var i = 1; i < hints.length; i++) {
+            var h = hints[i];
+            var tcr = h.getBoundingClientRect();
+            if (tcr.top === bcr.top && Math.abs(tcr.left - bcr.left) < bcr.width) {
+                var top = $(h).offset().top + $(h).height();
+                $(h).css('top', top);
+            }
+            bcr = h.getBoundingClientRect();
+        }
+        holder.appendTo('body');
+    }
+
+    function createHintsForClick(cssSelector, attrs) {
+        self.statusLine = "Hints to click";
+
         attrs = $.extend({
             active: true,
             tabbed: false,
@@ -212,7 +245,6 @@ var Hints = (function(mode) {
         for (var attr in attrs) {
             behaviours[attr] = attrs[attr];
         }
-        holder.show().html('');
         if (cssSelector === "") {
             cssSelector = "a, button, select, input, textarea";
             if (!runtime.conf.hintsThreshold || $(cssSelector).length < runtime.conf.hintsThreshold) {
@@ -226,90 +258,41 @@ var Hints = (function(mode) {
         } else {
             elements = $(document.body).find(cssSelector);
         }
-        elements = elements.filter(function(i) {
-            var ret = null;
-            var elm = this;
-            if ($(elm).attr('disabled') === undefined) {
-                var r = elm.getBoundingClientRect();
-                if (r.width === 0 || r.height === 0) {
-                    // use the first visible child instead
-                    var children = $(elm).find('*').filter(function(j) {
-                        var r = this.getBoundingClientRect();
-                        return (r.width > 0 && r.height > 0);
-                    });
-                    if (children.length) {
-                        elm = children[0];
-                    }
-                }
-                if (isElementPartiallyInViewport(elm)) {
-                    ret = elm;
-                }
-            }
-            return ret !== null;
-        });
-        elements = elements.filter(function() {
-            // filter out element which has his children covered
-            return !$(this.children).toArray().some(function(element, index, array) {
-                return elements.toArray().indexOf(element) !== -1;
-            });
-        });
+        elements = elements.filterInvisible().filterChildren();
         if (elements.length > 0) {
-            var hintLabels = self.genLabels(elements.length);
-            var bof = self.coordinate();
-            style.appendTo(holder);
-            elements.each(function(i) {
-                var pos = $(this).offset(),
-                    z = getZIndex(this);
-                if (pos.top === 0 && pos.left === 0) {
-                    // work around for svg elements, https://github.com/jquery/jquery/issues/3182
-                    pos = this.getBoundingClientRect();
-                }
-                var left;
-                if (runtime.conf.hintAlign === "right") {
-                    left = pos.left - bof.left + $(this).width();
-                } else if (runtime.conf.hintAlign === "left") {
-                    left = pos.left - bof.left;
-                } else {
-                    left = pos.left - bof.left + $(this).width() / 2;
-                }
-                left = Math.max(left, 0);
-                var link = $('<div/>').css('top', Math.max(pos.top - bof.top, 0)).css('left', left)
-                    .css('z-index', z + 9999)
-                    .data('z-index', z + 9999)
-                    .data('label', hintLabels[i])
-                    .data('link', this)
-                    .data('onhint', onHintKey)
-                    .html(hintLabels[i]);
-                holder.append(link);
-            });
-            var hints = holder.find('>div');
-            var bcr = hints[0].getBoundingClientRect();
-            for (var i = 1; i < hints.length; i++) {
-                var h = hints[i];
-                var tcr = h.getBoundingClientRect();
-                if (tcr.top === bcr.top && Math.abs(tcr.left - bcr.left) < bcr.width) {
-                    var top = $(h).offset().top + $(h).height();
-                    $(h).css('top', top);
-                }
-                bcr = h.getBoundingClientRect();
-            }
-            holder.appendTo('body');
+            placeHints(elements);
         }
 
         return elements.length;
     }
 
-    self.create = function(cssSelector, onHintKey, attrs) {
-        // save last used attributes, which will be reused if the user scrolls while the hints are still open
-        _lastCreateAttrs = attrs;
+    function createHintsForTextNode() {
 
-        var hintTotal = createHints(cssSelector, onHintKey, attrs);
-        if (hintTotal) {
-            self.enter();
+        self.statusLine = "Hints to select text";
+
+        var elements = $(getTextNodes(document.body, /./, 2));
+        elements = elements.filterInvisible();
+        if (elements.length > 0) {
+            placeHints(elements);
+            holder.addClass("hintsForTextNode");
+
         }
 
-        if (hintTotal === 1) {
-            handleHint();
+        return elements.length;
+    }
+
+    function createHints(cssSelector, attrs) {
+        return (cssSelector === "TEXT_NODES") ? createHintsForTextNode() : createHintsForClick(cssSelector, attrs);
+    }
+
+    self.create = function(cssSelector, onHintKey, attrs) {
+        // save last used attributes, which will be reused if the user scrolls while the hints are still open
+        _cssSelector = cssSelector;
+        _onHintKey = onHintKey;
+        _lastCreateAttrs = attrs;
+
+        if (createHints(cssSelector, attrs)) {
+            self.enter();
         }
     };
 

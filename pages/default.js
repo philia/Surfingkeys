@@ -50,7 +50,6 @@ mapkey('cp', '#13Toggle proxy for current site', function() {
 command('setProxy', 'setProxy <proxy_host>:<proxy_port> [proxy_type|PROXY]', function(args) {
     // args is an array of arguments
     var proxy = ((args.length > 1) ? args[1] : "PROXY") + " " + args[0];
-    console.log(proxy);
     RUNTIME('updateProxy', {
         proxy: proxy
     });
@@ -78,7 +77,7 @@ command('proxyInfo', '#13show proxy info', function() {
         var infos = [ {name: 'mode', value: response.settings.proxyMode} ];
         if (response.settings.proxyMode === "byhost") {
             infos.push({name: 'proxy', value: response.settings.proxy});
-            infos.push({name: 'hosts', value: Object.keys(response.settings.autoproxy_hosts).join(', ')});
+            infos.push({name: 'hosts', value: response.settings.autoproxy_hosts.join(', ')});
         } else if (response.settings.proxyMode === "always") {
             infos.push({name: 'proxy', value: response.settings.proxy});
         }
@@ -92,7 +91,6 @@ command('proxyInfo', '#13show proxy info', function() {
 map('spi', ':proxyInfo');
 command('addProxySite', 'addProxySite <host[,host]>, make hosts accessible through proxy.', function(args) {
     var host = args.join('');
-    console.log(host);
     RUNTIME('updateProxy', {
         host: host,
         operation: 'add'
@@ -259,9 +257,10 @@ command('clearHistory', 'clearHistory <find|cmd|...>', function(args) {
 });
 command('listSession', 'list session', function() {
     runtime.command({
-        action: 'getSessions'
+        action: 'getSettings',
+        key: 'sessions'
     }, function(response) {
-        Omnibar.listResults(Object.keys(response.sessions), function(s) {
+        Omnibar.listResults(Object.keys(response.settings.sessions), function(s) {
             return $('<li/>').html(s);
         });
     });
@@ -305,6 +304,7 @@ vmapkey('<Ctrl-d>', '#9Forward 20 lines', function() {
 });
 mapkey('x', '#3Close current tab', 'RUNTIME("closeTab")');
 mapkey('X', '#3Restore closed tab', 'RUNTIME("openLast")');
+mapkey('W', '#3New window with current tab',  'RUNTIME("newWindow")');
 mapkey('spk', '#0show pressed key', function() {
     Front.showPressed();
 });
@@ -357,7 +357,8 @@ mapkey('ys', "#7Copy current page's source", function() {
 });
 mapkey('yj', "#7Copy current settings", function() {
     runtime.command({
-        action: 'getSettings'
+        action: 'getSettings',
+        key: "RAW"
     }, function(response) {
         Front.writeClipboard(JSON.stringify(response.settings, null, 4));
     });
@@ -435,7 +436,6 @@ mapkey('g?', '#4Reload current page without query string(all parts after questio
 });
 mapkey('gU', '#4Go to root of current URL hierarchy', 'window.location.href = window.location.origin');
 mapkey('se', '#11Edit Settings', 'tabOpenLink("/pages/options.html")');
-mapkey('sr', '#11Reset Settings', 'Normal.resetSettings()');
 mapkey('si', '#12Open Chrome Inspect', 'tabOpenLink("chrome://inspect/#devices")');
 mapkey('sm', '#11Preview markdown', 'tabOpenLink("/pages/github-markdown.html")');
 mapkey('<Ctrl-Alt-d>', '#11Mermaid diagram generator', 'tabOpenLink("/pages/mermaid.html")');
@@ -477,3 +477,5 @@ addSearchAliasX('w', 'bing', 'http://global.bing.com/search?setmkt=en-us&setlang
 });
 addSearchAliasX('s', 'stackoverflow', 'http://stackoverflow.com/search?q=');
 addSearchAliasX('h', 'github', 'https://github.com/search?type=Code&utf8=%E2%9C%93&q=');
+
+$(document).trigger("surfingkeys:defaultSettingsLoaded");

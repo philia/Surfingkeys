@@ -3,13 +3,13 @@ var runtime = window.runtime || (function() {
         conf: {
             lastKeys: "",
             // local part from settings
-            useLocalMarkdownAPI: true,                         // use local js to parse markdown own, or use github markdown API
+            useLocalMarkdownAPI: true,
             focusOnSaved: true,
             omnibarMaxResults: 20,
             tabsThreshold: 9,
             hintsThreshold: 10000,
             smoothScroll: true,
-            afterYank: 1,
+            collapseAfterYank: true,
             scrollStepSize: 70,
             nextLinkRegex: /((>>|next)+)/i,
             prevLinkRegex: /((<<|prev(ious)?)+)/i,

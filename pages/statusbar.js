@@ -2,6 +2,10 @@ var StatusBar = (function(ui) {
     var self = {};
 
     var timerHide = null;
+
+    // mode: 0
+    // search: 1
+    // searchResult: 2
     self.show = function(n, content, duration) {
         if (timerHide) {
             clearTimeout(timerHide);
@@ -26,30 +30,40 @@ var StatusBar = (function(ui) {
         }
         $(span[lastSpan]).css('border-right', '');
         ui.css('display', lastSpan === -1 ? 'none' : 'block');
-        Front.flush("none", false);
+        Front.flush();
         if (duration) {
             timerHide = setTimeout(function() {
-                ui.css('display', 'none');
+                self.show(n, "");
             }, duration);
         }
     };
     return self;
 })(Front.statusBar);
 
-var Find = (function() {
-    var self = {};
+var Find = (function(mode) {
+    var self = $.extend({
+        name: "Find",
+        statusLine: "/",
+        eventListeners: {}
+    }, mode);
+
+    self.addEventListener('keydown', function(event) {
+        // prevent this event to be handled by Surfingkeys' other listeners
+        event.sk_suppressed = true;
+    }).addEventListener('mousedown', function(event) {
+        event.sk_suppressed = true;
+    });
 
     var input = $('<input id="sk_find" class="sk_theme"/>');
     var historyInc;
     function reset() {
         input.val('');
-        StatusBar.show(-1, '');
-        PassThrough.exit();
+        StatusBar.show(1, "");
+        self.exit();
     }
 
     self.open = function() {
         historyInc = -1;
-        StatusBar.show(0, "/");
         StatusBar.show(1, input);
         input.on('input', function() {
             Front.visualCommand({
@@ -66,9 +80,6 @@ var Find = (function() {
         });
         input[0].onkeydown = function(event) {
             if (Mode.isSpecialKeyOf("<Esc>", event.sk_keyName)) {
-                Front.visualCommand({
-                    action: 'visualClear'
-                });
                 reset();
             } else if (event.keyCode === KeyboardUtils.keyCodes.enter) {
                 var query = input.val();
@@ -92,7 +103,7 @@ var Find = (function() {
             }
         };
         input.focus();
-        PassThrough.enter();
+        self.enter();
     };
     return self;
-})();
+})(Mode);

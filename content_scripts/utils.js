@@ -23,10 +23,51 @@ function isEditable(element) {
 }
 function reportIssue(title, description) {
     title = encodeURIComponent(title);
-    description = "%23%23+Error+details%0A%0A{0}%0A%0ASurfingKeys%3A+{1}%0A%0AChrome%3A+{2}%0A%0A%23%23+Context%0A%0A%2A%2APlease+replace+this+with+a+description+of+how+you+were+using+SurfingKeys.%2A%2A".format(encodeURIComponent(description), chrome.runtime.getManifest().version, encodeURIComponent(navigator.userAgent));
+    description = "%23%23+Error+details%0A%0A{0}%0A%0ASurfingKeys%3A+{1}%0A%0AChrome%3A+{2}%0A%0AURL%3A+{3}%0A%0A%23%23+Context%0A%0A%2A%2APlease+replace+this+with+a+description+of+how+you+were+using+SurfingKeys.%2A%2A".format(encodeURIComponent(description), chrome.runtime.getManifest().version, encodeURIComponent(navigator.userAgent), encodeURIComponent(window.location.href));
     var error = '<h2>Uh-oh! The SurfingKeys extension encountered a bug.</h2> <p>Please click <a href="https://github.com/brookhong/Surfingkeys/issues/new?title={0}&body={1}" target=_blank>here</a> to start filing a new issue, append a description of how you were using SurfingKeys before this message appeared, then submit it.  Thanks for your help!</p>'.format(title, description);
 
     Front.showPopup(error);
+}
+
+function isElementPartiallyInViewport(el) {
+    var rect = el.getBoundingClientRect();
+    var windowHeight = (window.innerHeight || document.documentElement.clientHeight);
+    var windowWidth = (window.innerWidth || document.documentElement.clientWidth);
+
+    return rect.width > 4 && rect.height > 4
+        && (rect.top <= windowHeight) && ((rect.top + rect.height) >= 0)
+        && (rect.left <= windowWidth) && ((rect.left + rect.width) >= 0)
+}
+
+function getTextNodes(root, pattern, flag) {
+    var skip_tags = ['script', 'style', 'noscript', 'surfingkeys_mark'];
+    var treeWalker = document.createTreeWalker(
+        root,
+        NodeFilter.SHOW_TEXT, {
+            acceptNode: function(node) {
+                if (!node.data.trim() || !node.parentNode.offsetParent || skip_tags.indexOf(node.parentNode.localName.toLowerCase()) !== -1 || !pattern.test(node.data))
+                    return NodeFilter.FILTER_REJECT;
+                var br = node.parentNode.getBoundingClientRect();
+                if (br.width < 4 || br.height < 4) {
+                    return NodeFilter.FILTER_REJECT;
+                }
+                return NodeFilter.FILTER_ACCEPT;
+            }
+        }, false);
+
+    var nodes = [];
+    if (flag === 1) {
+        nodes.push(treeWalker.firstChild());
+    } else if (flag === -1) {
+        nodes.push(treeWalker.lastChild());
+    } else if (flag === 0) {
+        return treeWalker;
+    } else if (flag === 2) {
+        while (treeWalker.nextNode()) nodes.push(treeWalker.currentNode.parentNode);
+    } else {
+        while (treeWalker.nextNode()) nodes.push(treeWalker.currentNode);
+    }
+    return nodes;
 }
 
 String.prototype.format = function() {
@@ -52,6 +93,39 @@ String.prototype.format = function() {
     $.fn.topInView = function() {
         return this.filter(function() {
             return $(this).width() * $(this).height() > 0 && $(this).offset().top > document.body.scrollTop;
+        });
+    };
+
+    $.fn.filterInvisible = function() {
+        return this.filter(function(i) {
+            var ret = null;
+            var elm = this;
+            if ($(elm).attr('disabled') === undefined) {
+                var r = elm.getBoundingClientRect();
+                if (r.width === 0 || r.height === 0) {
+                    // use the first visible child instead
+                    var children = $(elm).find('*').filter(function(j) {
+                        var r = this.getBoundingClientRect();
+                        return (r.width > 0 && r.height > 0);
+                    });
+                    if (children.length) {
+                        elm = children[0];
+                    }
+                }
+                if (isElementPartiallyInViewport(elm)) {
+                    ret = elm;
+                }
+            }
+            return ret !== null;
+        });
+    };
+    $.fn.filterChildren = function() {
+        var elements = this;
+        return this.filter(function() {
+            // filter out element which has his children covered
+            return !$(this.children).toArray().some(function(element, index, array) {
+                return elements.toArray().indexOf(element) !== -1;
+            });
         });
     };
 })(jQuery);

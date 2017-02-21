@@ -74,7 +74,7 @@ function renderSettings(rs) {
     var h = $(window).height() - $('#save_container').outerHeight() * 4;
     $(mappingsEditor.container).css('height', h);
     $(defaultMappingsEditor.container).css('height', h);
-    if (rs.snippets.length) {
+    if (rs.snippets && rs.snippets.length) {
         mappingsEditor.setValue(rs.snippets, -1);
     } else {
         mappingsEditor.setExampleValue();
@@ -97,14 +97,13 @@ runtime.command({
     mappingsEditor = createMappingEditor(Mode, 'mappings');
     renderSettings(response.settings);
     if ('error' in response.settings) {
-        Front.showBanner("Settings sync may not work thoroughly because of: " + response.settings.error, 5000);
+        Front.showBanner(response.settings.error, 5000);
     }
 });
 
 $('#reset_button').click(function() {
     runtime.command({
-        action: "resetSettings",
-        useDefault: true
+        action: "resetSettings"
     }, function(response) {
         renderSettings(response.settings);
         Front.showBanner('Settings reset', 300);

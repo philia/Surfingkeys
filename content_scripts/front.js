@@ -167,12 +167,13 @@ var Front = (function() {
             duration: duration,
             position: pos
         });
-    }
+    };
 
     runtime.on('ace_editor_saved', function(response) {
         onEditorSaved(response.data);
         if (runtime.conf.focusOnSaved && isEditable(elementBehindEditor)) {
             elementBehindEditor.focus();
+            window.focus();
             Insert.enter();
         }
     });
@@ -207,7 +208,7 @@ var Front = (function() {
 
             Normal.exit();
             Normal.enter();
-            GetBackFocus.enter();
+            GetBackFocus.enter(0, true);
         }
     };
 

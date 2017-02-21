@@ -40,7 +40,7 @@ function parseCommand(cmdline) {
 }
 
 RUNTIME = function(action, args) {
-    var actionsRepeatBackground = ['closeTab', 'nextTab', 'previousTab', 'moveTab', 'reloadTab'];
+    var actionsRepeatBackground = ['closeTab', 'nextTab', 'previousTab', 'moveTab', 'reloadTab', 'setZoom'];
     (args = args || {}).action = action;
     if (actionsRepeatBackground.indexOf(action) !== -1) {
         // if the action can only be repeated in background, pass repeats to background with args,
@@ -163,18 +163,24 @@ function unmap(keystroke, domain) {
 
 function unmapAllExcept(keystrokes, domain) {
     if (!domain || domain.test(window.location.origin)) {
-        var _mappings = new Trie();
-        keystrokes = keystrokes || [];
-        for (var i = 0, il = keystrokes.length; i < il; i++) {
-            var ks = encodeKeystroke(keystrokes[i]);
-            var node = Normal.mappings.find(ks);
-            if (node) {
-                _mappings.add(ks, node.meta);
-            }
+        var modes = [Normal, Visual, Insert];
+        if (typeof(Omnibar) !== 'undefined') {
+            modes.push(Omnibar);
         }
-        delete Normal.mappings;
-        Normal.mappings = _mappings;
-        Normal.map_node = _mappings;
+        modes.forEach(function(mode) {
+            var _mappings = new Trie();
+            keystrokes = keystrokes || [];
+            for (var i = 0, il = keystrokes.length; i < il; i++) {
+                var ks = encodeKeystroke(keystrokes[i]);
+                var node = mode.mappings.find(ks);
+                if (node) {
+                    _mappings.add(ks, node.meta);
+                }
+            }
+            delete mode.mappings;
+            mode.mappings = _mappings;
+            mode.map_node = _mappings;
+        });
     }
 }
 
@@ -197,6 +203,12 @@ function iunmap(keystroke, domain) {
     }
 }
 
+function vunmap(keystroke, domain) {
+    if (!domain || domain.test(window.location.origin)) {
+        Visual.mappings.remove(encodeKeystroke(keystroke));
+    }
+}
+
 AceVimMappings = [];
 function aceVimMap(lhs, rhs, ctx) {
     AceVimMappings.push(arguments);
@@ -207,24 +219,41 @@ function addSearchAliasX(alias, prompt, search_url, search_leader_key, suggestio
         addSearchAlias(alias, prompt, search_url, suggestion_url, callback_to_parse_suggestion);
     }
     mapkey((search_leader_key || 's') + alias, '#6Search selected with ' + prompt, 'searchSelectedWith("{0}")'.format(search_url));
-    vmapkey((search_leader_key || 's') + alias, '#6Search selected with ' + prompt, 'searchSelectedWith("{0}")'.format(search_url));
-    mapkey((search_leader_key || 's') + (only_this_site_key || 'o') + alias, '#6Search selected only in this site with ' + prompt, 'searchSelectedWith("{0}", true)'.format(search_url));
-    vmapkey((search_leader_key || 's') + (only_this_site_key || 'o') + alias, '#6Search selected only in this site with ' + prompt, 'searchSelectedWith("{0}", true)'.format(search_url));
+    vmapkey((search_leader_key || 's') + alias, '', 'searchSelectedWith("{0}")'.format(search_url));
+    mapkey((search_leader_key || 's') + (only_this_site_key || 'o') + alias, '', 'searchSelectedWith("{0}", true)'.format(search_url));
+    vmapkey((search_leader_key || 's') + (only_this_site_key || 'o') + alias, '', 'searchSelectedWith("{0}", true)'.format(search_url));
 
     var capitalAlias = alias.toUpperCase();
     if (capitalAlias !== alias) {
-        mapkey((search_leader_key || 's') + capitalAlias, '#6Search selected with {0} interactively'.format(prompt), function() {
+        mapkey((search_leader_key || 's') + capitalAlias, '', function() {
             searchSelectedWith(search_url, false, true, alias);
         });
-        vmapkey((search_leader_key || 's') + capitalAlias, '#6Search selected with {0} interactively'.format(prompt), function() {
+        vmapkey((search_leader_key || 's') + capitalAlias, '', function() {
             searchSelectedWith(search_url, false, true, alias);
         });
-        mapkey((search_leader_key || 's') + (only_this_site_key || 'o') + capitalAlias, '#6Search selected only in this site with {0} interactively'.format(prompt), function() {
+        mapkey((search_leader_key || 's') + (only_this_site_key || 'o') + capitalAlias, '', function() {
             searchSelectedWith(search_url, true, true, alias);
         });
-        vmapkey((search_leader_key || 's') + (only_this_site_key || 'o') + capitalAlias, '#6Search selected only in this site with {0} interactively'.format(prompt), function() {
+        vmapkey((search_leader_key || 's') + (only_this_site_key || 'o') + capitalAlias, '', function() {
             searchSelectedWith(search_url, true, true, alias);
         });
+    }
+}
+
+function removeSearchAliasX(alias, search_leader_key, only_this_site_key) {
+    if (typeof(removeSearchAlias) !== 'undefined') {
+        removeSearchAlias(alias);
+    }
+    unmap((search_leader_key || 's') + alias);
+    vunmap((search_leader_key || 's') + alias);
+    unmap((search_leader_key || 's') + (only_this_site_key || 'o') + alias);
+    vunmap((search_leader_key || 's') + (only_this_site_key || 'o') + alias);
+    var capitalAlias = alias.toUpperCase();
+    if (capitalAlias !== alias) {
+        unmap((search_leader_key || 's') + capitalAlias);
+        vunmap((search_leader_key || 's') + capitalAlias);
+        unmap((search_leader_key || 's') + (only_this_site_key || 'o') + capitalAlias);
+        vunmap((search_leader_key || 's') + (only_this_site_key || 'o') + capitalAlias);
     }
 }
 
@@ -412,7 +441,7 @@ runtime.on('settingsUpdated', function(response) {
         var disabled = checkBlackList(rs);
         // only toggle Disabled mode when blacklist is updated
         if (disabled) {
-            Disabled.enter();
+            Disabled.enter(0, true);
         } else {
             Disabled.exit();
         }
@@ -433,31 +462,33 @@ function checkBlackList(sb) {
     );
 }
 
-runtime.command({
-    action: 'getSettings'
-}, function(response) {
-    var rs = response.settings;
+$(document).on('surfingkeys:defaultSettingsLoaded', function() {
+    runtime.command({
+        action: 'getSettings'
+    }, function(response) {
+        var rs = response.settings;
 
-    applySettings(rs);
+        applySettings(rs);
 
-    Normal.enter();
+        Normal.enter();
 
-    var disabled = checkBlackList(rs);
-    if (disabled) {
-        Disabled.enter();
-    } else {
-        document.addEventListener('DOMContentLoaded', function(e) {
-            GetBackFocus.enter();
-        });
-    }
+        var disabled = checkBlackList(rs);
+        if (disabled) {
+            Disabled.enter(0, true);
+        } else {
+            document.addEventListener('DOMContentLoaded', function(e) {
+                GetBackFocus.enter(0, true);
+            });
+        }
 
-    if (window === top) {
-        // this block being put here instead of top.js is to ensure sequence.
-        runtime.command({
-            action: 'setSurfingkeysIcon',
-            status: disabled
-        });
-    }
+        if (window === top) {
+            // this block being put here instead of top.js is to ensure sequence.
+            runtime.command({
+                action: 'setSurfingkeysIcon',
+                status: disabled
+            });
+        }
+    });
 });
 
 Normal.insertJS(function() {

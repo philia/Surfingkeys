@@ -21,6 +21,11 @@ var TopHook = (function(mode) {
         self.exit();
     });
 
+    self.addEventListener('pushState', function(event) {
+        event.sk_suppressed = true;
+        Insert.exit();
+    });
+
     return self;
 })(Mode);
 TopHook.enter(9999);
@@ -50,7 +55,7 @@ var frontendFrame = (function() {
         if (response.pointerEvents) {
             ifr.css('pointer-events', response.pointerEvents);
         }
-        if (response.hostBlur) {
+        if (response.pointerEvents === "none") {
             uiHost.blur();
         }
     };
@@ -100,6 +105,9 @@ document.addEventListener('DOMContentLoaded', function(e) {
     }, 0);
 });
 function createFrontEnd() {
+    if (!frontendFrame) {
+        return;
+    }
     var frontendReady = frontendFrame.contentWindow && frontendFrame.contentWindow.top === top;
     if (!frontendReady) {
         if (!document.body) {
