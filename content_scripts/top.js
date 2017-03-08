@@ -9,10 +9,6 @@ var TopHook = (function(mode) {
         }, 0);
     });
 
-    self.enter = function(priority) {
-        mode.enter.call(self, priority);
-    };
-
     self.addEventListener('mousedown', function(event) {
         self.exit();
     });
@@ -33,6 +29,8 @@ TopHook.enter(9999);
 var frontendFrame = (function() {
     var self = {};
     var uiHost = document.createElement("div");
+    uiHost.style.display = "block";
+    uiHost.style.opacity = 1;
     var frontEndURL = chrome.runtime.getURL('pages/frontend.html');
     var ifr = $('<iframe allowtransparency=true frameborder=0 scrolling=no class=sk_ui src="{0}" />'.format(frontEndURL));
     uiHost.createShadowRoot();

@@ -153,24 +153,35 @@ var Front = (function() {
         });
     };
 
-    self.showKeystroke = function(key) {
+    self.showKeystroke = function(key, mode) {
         frontendCommand({
             action: 'showKeystroke',
+            mode: mode,
             key: decodeKeystroke(key)
         });
     };
 
     self.showStatus = function (pos, msg, duration) {
-        frontendCommand({
+        // don't createFrontEnd for showStatus, test on issues.xxxxxx.com
+        runtime.command({
             action: "showStatus",
             content: msg,
             duration: duration,
+            toFrontend: true,
             position: pos
+        });
+    };
+    self.toggleStatus = function () {
+        runtime.command({
+            action: "toggleStatus",
+            toFrontend: true
         });
     };
 
     runtime.on('ace_editor_saved', function(response) {
-        onEditorSaved(response.data);
+        if (response.data !== undefined) {
+            onEditorSaved(response.data);
+        }
         if (runtime.conf.focusOnSaved && isEditable(elementBehindEditor)) {
             elementBehindEditor.focus();
             window.focus();
@@ -181,10 +192,6 @@ var Front = (function() {
     runtime.on('omnibar_query_entered', function(response) {
         runtime.updateHistory('OmniQuery', response.query);
         onOmniQuery(response.query);
-    });
-
-    runtime.on('getFocusFromFront', function(response) {
-        document.body.focus();
     });
 
     runtime.on('getPageText', function(response) {

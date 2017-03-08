@@ -920,6 +920,11 @@ var Service = (function() {
             urls: tabURL
         });
     };
+    self.getTopURL = function(message, sender, sendResponse) {
+        _response(message, sendResponse, {
+            url: sender.tab.url
+        });
+    };
 
     function FindProxyForURL(url, host) {
         var lastPos;
@@ -969,12 +974,14 @@ var Service = (function() {
                 }
                 proxyConf.autoproxy_hosts = Object.keys(hostsDict);
             }
-            _updateSettings({
+            var diffSet = {
                 autoproxy_hosts: proxyConf.autoproxy_hosts,
                 proxyMode: proxyConf.proxyMode,
                 proxy: proxyConf.proxy
-            });
+            };
+            _updateAndPostSettings(diffSet);
             _applyProxySettings(proxyConf);
+            _response(message, sendResponse, diffSet);
         });
     };
     self.setZoom = function(message, sender, sendResponse) {

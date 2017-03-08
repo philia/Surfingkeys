@@ -56,8 +56,15 @@ command('setProxy', 'setProxy <proxy_host>:<proxy_port> [proxy_type|PROXY]', fun
     return true;
 });
 command('setProxyMode', 'setProxyMode <always|direct|byhost|system|clear>', function(args) {
-    RUNTIME('updateProxy', {
+    runtime.command({
+        action: "updateProxy",
         mode: args[0]
+    }, function(rs) {
+        if (["byhost", "always"].indexOf(rs.proxyMode) !== -1) {
+            Front.showBanner("{0}: {1}".format(rs.proxyMode, rs.proxy), 3000);
+        } else {
+            Front.showBanner(rs.proxyMode, 3000);
+        }
     });
     // return true to close Omnibar for Commands, false to keep Omnibar on
     return true;
@@ -200,6 +207,10 @@ mapkey('I', '#1Go to edit box with vim editor', function() {
     });
 });
 map('<Ctrl-i>', 'I');
+cmap('<ArrowDown>', '<Tab>');
+cmap('<ArrowUp>', '<Shift-Tab>');
+cmap('<Ctrl-n>', '<Tab>');
+cmap('<Ctrl-p>', '<Shift-Tab>');
 mapkey('q', '#1Click on an Image or a button', 'Hints.create("img, button", Hints.dispatchMouseClick)');
 mapkey('E', '#3Go one tab left', 'RUNTIME("previousTab")');
 mapkey('R', '#3Go one tab right', 'RUNTIME("nextTab")');
@@ -214,6 +225,19 @@ mapkey('t', '#8Open a URL', 'Front.openOmnibar({type: "URLs", extra: "getAllSite
 mapkey('go', '#8Open a URL in current tab', 'Front.openOmnibar({type: "URLs", extra: "getAllSites", tabbed: false})');
 mapkey('ox', '#8Open recently closed URL', 'Front.openOmnibar({type: "URLs", extra: "getRecentlyClosed"})');
 mapkey('H', '#8Open opened URL in current tab', 'Front.openOmnibar({type: "URLs", extra: "getTabURLs"})');
+function renderShanbay(res) {
+    var exp = res.msg;
+    if (res.data.definition) {
+        var tmp = [];
+        for (var reg in res.data.pronunciations) {
+            tmp.push('[{0}] {1}'.format(reg, res.data.pronunciations[reg]));
+            tmp.push('<audio src="{0}" controls></audio>'.format(res.data[reg+'_audio']));
+        }
+        tmp.push(res.data.definition);
+        exp = '<pre>{0}</pre>'.format(tmp.join('\n'));
+    }
+    return exp;
+}
 mapkey('Q', '#8Open omnibar for word translation', function() {
     Front.openOmniquery({
         url: "https://api.shanbay.com/bdc/search/?word=",
@@ -227,19 +251,13 @@ mapkey('Q', '#8Open omnibar for word translation', function() {
         style: "opacity: 0.8;",
         parseResult: function(res) {
             var res = JSON.parse(res.text);
-            if (res.data.definition) {
-                var tmp = [];
-                for (var reg in res.data.pronunciations) {
-                    tmp.push('[{0}] {1}'.format(reg, res.data.pronunciations[reg]));
-                    tmp.push('<audio src="{0}" controls></audio>'.format(res.data[reg+'_audio']));
-                }
-                tmp.push(res.data.definition);
-                return [ '<pre>{0}</pre>'.format(tmp.join('\n')) ];
-            } else {
-                return [ res.msg ];
-            }
+            return [ renderShanbay(res) ];
         }
     });
+});
+Visual.setTranslationService("https://api.shanbay.com/bdc/search/?word=", function(res) {
+    var res = JSON.parse(res.text);
+    return renderShanbay(res);
 });
 mapkey('b', '#8Open a bookmark', 'Front.openOmnibar(({type: "Bookmarks"}))');
 mapkey('ab', '#8Bookmark current page to selected folder', function() {
@@ -424,12 +442,22 @@ mapkey('ge', '#12Open Chrome Extensions', 'tabOpenLink("chrome://extensions/")')
 mapkey('gn', '#12Open Chrome net-internals', 'tabOpenLink("chrome://net-internals/#proxy")');
 mapkey('gs', '#12View page source', 'RUNTIME("viewSource", { tab: { tabbed: true }})');
 mapkey('gu', '#4Go up one path in the URL', function() {
-    var url = location.href;
-    if (location.pathname.length > 1) {
-        url = url.endsWith('/') ? url.substr(0, url.length - 1) : url;
-        url = url.substr(0, url.lastIndexOf('/'));
+    var pathname = location.pathname;
+    if (pathname.length > 1) {
+        pathname = pathname.endsWith('/') ? pathname.substr(0, pathname.length - 1) : pathname;
+        var last = pathname.lastIndexOf('/'), repeats = RUNTIME.repeats;
+        RUNTIME.repeats = 1;
+        while (repeats-- > 1) {
+            var p = pathname.lastIndexOf('/', last - 1);
+            if (p === -1) {
+                break;
+            } else {
+                last = p;
+            }
+        }
+        pathname = pathname.substr(0, last);
     }
-    window.location.href = url;
+    window.location.href = location.origin + pathname;
 });
 mapkey('g?', '#4Reload current page without query string(all parts after question mark)', function() {
     window.location.href = window.location.href.replace(/\?[^\?]*$/, '');

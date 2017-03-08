@@ -1,5 +1,10 @@
 var Front = (function(mode) {
-    var self = $.extend({name: "Front", eventListeners: {}, ports: {}}, mode);
+    var self = $.extend({
+        name: "Front",
+        frontendOnly: true,
+        eventListeners: {},
+        ports: {}
+    }, mode);
 
     // this object is implementation of UI, it's UI provider
     self.isProvider = function() {
@@ -63,7 +68,7 @@ var Front = (function(mode) {
         var visibleDivs = $('body>div:visible').toArray();
         var pointerEvents = visibleDivs.map(function(d) {
             var id = $(d).attr('id');
-            var divNoPointerEvents = ["sk_keystroke", "sk_bubble", "sk_banner"];
+            var divNoPointerEvents = ["sk_keystroke", "sk_richKeystroke", "sk_bubble", "sk_banner", "sk_frame"];
             if (divNoPointerEvents.indexOf(id) !== -1) {
                 // no pointerEvents for bubble
                 return false;
@@ -110,8 +115,9 @@ var Front = (function(mode) {
     var _tabs = $("<div id=sk_tabs><div class=sk_tabs_fg></div><div class=sk_tabs_bg></div></div>").appendTo('body').hide();
     var banner = $('<div id=sk_banner class=sk_theme>').appendTo('body').hide();
     var _bubble = $("<div id=sk_bubble>").html("<div class=sk_bubble_content></div>").appendTo('body').hide();
-    $("<div class=sk_arrow>").html("<div class=sk_arrowdown></div><div class=sk_arrowdown_inner></div>").css('position', 'absolute').css('top', '100%').appendTo(_bubble);
+    $("<div class=sk_arrow>").html("<div></div><div></div>").css('position', 'absolute').css('top', '100%').appendTo(_bubble);
     var keystroke = $('<div id=sk_keystroke class=sk_theme>').appendTo('body').hide();
+    var _richKeystroke = $('<div id=sk_richKeystroke class=sk_theme>').appendTo('body').hide();
 
     var _display;
     self.hidePopup = function() {
@@ -119,9 +125,6 @@ var Front = (function(mode) {
             _display.hide();
             self.flush();
             _display.onHide && _display.onHide();
-            self.contentCommand({
-                action: 'getFocusFromFront'
-            });
             self.showPressed = false;
             self.exit();
         }
@@ -323,7 +326,7 @@ var Front = (function(mode) {
         self.flush();
         var w = _bubble.width(),
             h = _bubble.height();
-        var left = [pos.left - w / 2, w / 2];
+        var left = [pos.left - 11 - w / 2, w / 2];
         if (left[0] < 0) {
             left[1] += left[0];
             left[0] = 0;
@@ -331,8 +334,17 @@ var Front = (function(mode) {
             left[1] += left[0] - window.innerWidth + w;
             left[0] = window.innerWidth - w;
         }
-        _bubble.find('div.sk_arrow').css('left', left[1]);
-        _bubble.css('top', pos.top - h - 12).css('left', left[0]);
+        var arrow = _bubble.find('div.sk_arrow');
+        if (pos.top - h - 12 >= 0) {
+            arrow.attr('dir', 'down');
+            arrow.css('top', '100%');
+            _bubble.css('top', pos.top - h - pos.height - 12).css('left', left[0]);
+        } else {
+            arrow.attr('dir', 'up');
+            arrow.css('top', -12);
+            _bubble.css('top', pos.top + pos.height + 12).css('left', left[0]);
+        }
+        arrow.css('left', left[1]);
     });
     self.hideBubble = function() {
         _bubble.hide();
@@ -348,6 +360,10 @@ var Front = (function(mode) {
 
     runtime.on('showStatus', function(message) {
         self.showStatus(message.position, message.content, message.duration);
+    });
+
+    runtime.on('toggleStatus', function(message) {
+        self.statusBar.toggle();
     });
 
     var clipboard_holder = $('<textarea id=sk_clipboard/>');
@@ -383,32 +399,59 @@ var Front = (function(mode) {
     runtime.on('writeClipboard', function(message) {
         self.writeClipboard(message.content);
     });
+    var _key = "";
     self.hideKeystroke = function() {
-        keystroke.animate({
-            right: "-2rem"
-        }, 300, function() {
-            keystroke.html("");
-            keystroke.hide();
+        if (runtime.conf.richHintsForKeystroke) {
+            _richKeystroke.hide();
+            _key = "";
             self.flush();
-        });
+        } else {
+            keystroke.animate({
+                right: "-2rem"
+            }, 300, function() {
+                keystroke.html("");
+                keystroke.hide();
+                self.flush();
+            });
+        }
     };
     runtime.on('hideKeystroke', self.hideKeystroke);
-    self.showKeystroke = function(key) {
-        if (keystroke.is(':animated')) {
-            keystroke.finish()
-        }
-        keystroke.show();
-        self.flush();
-        var keys = keystroke.html() + key;
-        keystroke.html(htmlEncode(keys));
-        if (keystroke.css('right') !== '0px') {
-            keystroke.animate({
-                right: 0
-            }, 300);
+    self.showKeystroke = function(key, mode) {
+        if (runtime.conf.richHintsForKeystroke) {
+            _key += key;
+            var root = window[mode].mappings.find(_key);
+            if (root) {
+                var words = root.getWords("", true).sort().map(function(w) {
+                    var meta = root.find(w).meta;
+                    if (meta.annotation || mode !== "Normal") {
+                        return "<div><span class=kbd-span><kbd>{0}<span class=candidates>{1}</span></kbd></span><span class=annotation>{2}</span></div>".format(_key, w, meta.annotation);
+                    } else {
+                        return "";
+                    }
+                }).join("");
+                if (words.length === 0) {
+                    words = _key;
+                }
+                _richKeystroke.html(words).show();
+                self.flush();
+            }
+        } else {
+            if (keystroke.is(':animated')) {
+                keystroke.finish()
+            }
+            keystroke.show();
+            self.flush();
+            var keys = keystroke.html() + key;
+            keystroke.html(htmlEncode(keys));
+            if (keystroke.css('right') !== '0px') {
+                keystroke.animate({
+                    right: 0
+                }, 300);
+            }
         }
     };
     runtime.on('showKeystroke', function(message) {
-        self.showKeystroke(message.key);
+        self.showKeystroke(message.key, message.mode);
     });
 
     self.initPort = function(message) {

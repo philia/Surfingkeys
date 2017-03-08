@@ -1,5 +1,9 @@
 var Visual = (function(mode) {
-    var self = $.extend({name: "Visual", eventListeners: {}, _style: {}}, mode);
+    var self = $.extend({
+        name: "Visual",
+        eventListeners: {},
+        statusLine: "Visual"
+    }, mode);
 
     self.addEventListener('keydown', function(event) {
         if (visualf) {
@@ -19,44 +23,48 @@ var Visual = (function(mode) {
                 Mode.showStatus();
                 visualf = 0;
             }
-        } else if (Mode.isSpecialKeyOf("<Esc>", event.sk_keyName)) {
-            if (state > 1) {
-                cursor.remove();
-                selection.collapse(selection.anchorNode, selection.anchorOffset);
-                showCursor();
-            } else {
-                self.visualClear();
-                self.exit();
-            }
-            state--;
-            self.statusLine = self.name + " - " + status[state];
-            Mode.showStatus();
-            event.sk_stopPropagation = true;
         } else if (event.sk_keyName.length) {
             Normal._handleMapKey.call(self, event);
+            if (event.sk_stopPropagation) {
+                event.sk_suppressed = true;
+            } else if (Mode.isSpecialKeyOf("<Esc>", event.sk_keyName)) {
+                if (state > 1) {
+                    cursor.remove();
+                    selection.collapse(selection.anchorNode, selection.anchorOffset);
+                    self.showCursor();
+                } else {
+                    self.visualClear();
+                    self.exit();
+                }
+                state--;
+                self.statusLine = self.name + " - " + status[state];
+                Mode.showStatus();
+                event.sk_stopPropagation = true;
+                event.sk_suppressed = true;
+            }
         }
     });
 
     self.addEventListener('click', function(event) {
         switch (selection.type) {
             case "None":
-                hideCursor();
+                self.hideCursor();
                 state = 0;
                 break;
             case "Caret":
                 if (state) {
-                    hideCursor();
+                    self.hideCursor();
                     if (state === 0) {
                         state = 1;
                     }
-                    showCursor();
+                    self.showCursor();
                 }
                 break;
             case "Range":
                 if (state) {
-                    hideCursor();
+                    self.hideCursor();
                     state = 2;
-                    showCursor();
+                    self.showCursor();
                 }
                 break;
         }
@@ -136,6 +144,7 @@ var Visual = (function(mode) {
         annotation: "forward documentboundary",
         feature_group: 9,
         code: function() {
+            document.body.scrollTop = document.body.scrollHeight;
             modifySelection();
             if (matches.length) {
                 currentOccurrence = matches.length - 1;
@@ -166,7 +175,7 @@ var Visual = (function(mode) {
             Front.writeClipboard(selection.toString());
             if (runtime.conf.collapseAfterYank) {
                 selection.setPosition(pos[0], pos[1]);
-                showCursor();
+                self.showCursor();
             }
         }
     });
@@ -227,6 +236,24 @@ var Visual = (function(mode) {
             }
         }
     });
+    self.mappings.add("q", {
+        annotation: "Translate word under cursor",
+        feature_group: 9,
+        code: function() {
+            httpRequest({
+                url: _translationUrl + Visual.getWordUnderCursor()
+            }, function(res) {
+                var pos = Visual.getCursorPos();
+                Front.showBubble(pos, _parseTranslation(res));
+            });
+        }
+    });
+
+    var _translationUrl, _parseTranslation;
+    self.setTranslationService = function(url, cb) {
+        _translationUrl = url;
+        _parseTranslation = cb;
+    };
 
     var selection = document.getSelection(),
         caseSensitive = false,
@@ -241,7 +268,7 @@ var Visual = (function(mode) {
     var visualf = 0, lastF = null;
 
     function visualSeek(dir, chr) {
-        hideCursor();
+        self.hideCursor();
         var lastPosBeforeF = [selection.focusNode, selection.focusOffset];
         if (findNextTextNodeBy(chr, true, (dir === -1))) {
             var fix = (dir === -1) ? -1 : 0;
@@ -256,7 +283,7 @@ var Visual = (function(mode) {
         } else {
             selection.setPosition(lastPosBeforeF[0], lastPosBeforeF[1]);
         }
-        showCursor();
+        self.showCursor();
     }
 
     function getTextNodeByY(y) {
@@ -269,22 +296,6 @@ var Visual = (function(mode) {
             }
         }
         return node;
-    }
-
-    function getStartPos() {
-        var node = null,
-            offset = 0;
-        if (selection.anchorNode && selection.anchorNode.parentNode && selection.anchorNode.parentNode.className !== "surfingkeys_cursor") {
-            var top = $(selection.anchorNode.parentNode).offset().top;
-            if (top > document.body.scrollTop && top < document.body.scrollTop + window.innerHeight) {
-                node = selection.anchorNode;
-                offset = selection.anchorOffset;
-            }
-        }
-        if (!node) {
-            node = getTextNodeByY(0.3);
-        }
-        return [node, offset];
     }
 
     function getNearestWord(text, offset) {
@@ -303,7 +314,7 @@ var Visual = (function(mode) {
                 delta++;
                 found = ((offset - delta) >= 0 && !nonWord.test(text[offset - delta])) || ((offset + delta) < text.length && !nonWord.test(text[offset + delta]));
             }
-            offset = ((offset + delta) < text.length && !nonWord.test(text[offset + delta])) ? (offset + delta) : (offset - delta);
+            offset = ((offset - delta) >= 0 && !nonWord.test(text[offset - delta])) ? (offset - delta) : (offset + delta);
         }
         if (found) {
             var start = offset,
@@ -319,17 +330,20 @@ var Visual = (function(mode) {
         return ret;
     }
 
-    function hideCursor() {
+    self.hideCursor = function () {
         var lastPos = cursor.parentNode;
         cursor.remove();
         if (lastPos) {
             lastPos.normalize();
         }
+        $(document).trigger("surfingkeys:cursorHidden");
         return lastPos;
-    }
+    };
+    $(document).on('surfingkeys:cursorHidden', function() {
+        Front.hideBubble();
+    });
 
-    function showCursor() {
-        var ret = false;
+    self.showCursor = function () {
         if ($(selection.focusNode).is(':visible') || $(selection.focusNode.parentNode).is(':visible')) {
             // https://developer.mozilla.org/en-US/docs/Web/API/Selection
             // If focusNode is a text node, this is the number of characters within focusNode preceding the focus. If focusNode is an element, this is the number of child nodes of the focusNode preceding the focus.
@@ -345,39 +359,38 @@ var Visual = (function(mode) {
             if (cr.width === 0 || cr.height === 0) {
                 cursor.style.display = 'inline-block';
             }
+
+            // set content of cursor to enable scrollIntoViewIfNeeded
+            $(cursor).html('|');
+            cursor.scrollIntoViewIfNeeded();
+            $(cursor).html('');
         }
-        return ret;
-    }
+    };
+    self.getCursorPixelPos = function () {
+        return cursor.getBoundingClientRect();
+    };
+
 
     function select(found) {
-        hideCursor();
+        self.hideCursor();
         if (selection.anchorNode && state === 2) {
             selection.extend(found.firstChild, 0);
         } else {
             selection.setPosition(found.firstChild, 0);
         }
-        showCursor();
-        scrollIntoView();
+        self.showCursor();
     }
 
     function modifySelection() {
         var sel = self.map_node.meta.annotation.split(" ");
         var alter = (state === 2) ? "extend" : "move";
-        hideCursor();
+        self.hideCursor();
         var prevPos = [selection.focusNode, selection.focusOffset];
         selection.modify(alter, sel[0], sel[1]);
         if (prevPos[0] === selection.focusNode && prevPos[1] === selection.focusOffset) {
             selection.modify(alter, sel[0], "word");
         }
-        showCursor();
-        scrollIntoView();
-    }
-
-    function scrollIntoView() {
-        // set content of cursor to enable scrollIntoViewIfNeeded
-        $(cursor).html('|');
-        cursor.scrollIntoViewIfNeeded();
-        $(cursor).html('');
+        self.showCursor();
     }
 
     function createMatchMark(node, pos, len) {
@@ -413,7 +426,7 @@ var Visual = (function(mode) {
     }
 
     self.visualClear = function() {
-        hideCursor();
+        self.hideCursor();
         var nodes = matches;
         for (var i = 0; i < nodes.length; i++) {
             if (nodes[i].parentNode) {
@@ -433,7 +446,7 @@ var Visual = (function(mode) {
                 Mode.showStatus();
                 break;
             case 2:
-                hideCursor();
+                self.hideCursor();
                 selection.collapse(selection.focusNode, selection.focusOffset);
                 self.exit();
                 state = (state + 1) % 3;
@@ -444,7 +457,7 @@ var Visual = (function(mode) {
                 Hints.create("TEXT_NODES", function(element, event) {
                     setTimeout(function() {
                         selection.setPosition(element, 0);
-                        showCursor();
+                        self.showCursor();
                         self.enter();
                         state = (state + 1) % 3;
                         self.statusLine = self.name + " - " + status[state];
@@ -457,27 +470,40 @@ var Visual = (function(mode) {
 
     self.star = function() {
         if (selection.focusNode && selection.focusNode.nodeValue) {
-            hideCursor();
+            self.hideCursor();
             var pos = [selection.focusNode, selection.focusOffset];
             var query = self.getWordUnderCursor();
             runtime.updateHistory('find', query);
             self.visualClear();
             selection.setPosition(pos[0], pos[1]);
             highlight(new RegExp(query, "g" + (caseSensitive ? "" : "i")));
-            showCursor();
+            self.showCursor();
         }
     };
 
     self.getWordUnderCursor = function() {
-        hideCursor();
         var word = selection.toString();
-        if (word.length === 0 && selection.focusNode && selection.focusNode.nodeValue) {
-            word = getNearestWord(selection.focusNode.nodeValue, selection.focusOffset - 1);
-        }
-        if (state > 0) {
-            showCursor();
+        if (word.length === 0 && cursor.parentElement) {
+            var pe = cursor.parentElement;
+            if (pe.tagName === "SURFINGKEYS_MARK") {
+                pe = pe.parentElement;
+            }
+            cursor.innerText = "🇿";
+            var pos = pe.innerText.indexOf(cursor.innerText);
+            cursor.innerText = "";
+            word = getNearestWord(pe.innerText, pos);
         }
         return word;
+    };
+
+    self.getCursorPos = function() {
+        var br = cursor.getBoundingClientRect();
+        return {
+            left: br.left,
+            top: br.top,
+            height: br.height,
+            width: br.width
+        };
     };
 
     self.next = function(backward) {
@@ -584,11 +610,12 @@ var Visual = (function(mode) {
         self.visualEnter(message.query);
     });
 
+    var _style = {};
     self.style = function (element, style) {
-        self._style[element] = style;
+        _style[element] = style;
 
-        cursor.setAttribute('style', self._style.cursor || '');
-        mark_template.setAttribute('style', self._style.marks || '');
+        cursor.setAttribute('style', _style.cursor || '');
+        mark_template.setAttribute('style', _style.marks || '');
     };
     return self;
 })(Mode);
